@@ -43,7 +43,7 @@
 |---|--------|--------|----------|------|--------------|
 | D1 | 主界面无注册入口 | 看主页面 | 页面上**没有**「Agent 管理 / 注册」表单；agent 信息只出现在被它接取的卡片上 | |
 | D2 | API 注册并接取 | 先上传头像：`curl -F "file=@头像.png" http://localhost:8080/api/avatars`，记下返回的 `path`；再 claim：`curl -X POST -H "Content-Type: application/json" -d '{"agentId":"a1","name":"Alpha","avatar":"<上一步的path>"}' http://localhost:8080/api/tasks/<id>/claim` | 返回 200，卡片移到**处理中**列，标题旁显示图片头像 + 名称 | |
-| D3 | 名称与 id 分开显示 | 用名称 `Grok Build`、id `grok build` 接取后看卡片 | 卡片显示加粗名称「Grok Build」+ 灰色小药丸 id「grok build」，不会连成一串 | |
+| D3 | 卡片只显示名称 | 用名称 `Grok Build`、id `grok build` 接取后看卡片 | 卡片只显示图片头像 + 加粗名称「Grok Build」，**不显示** id（id 仅存在于 API 层） | |
 | D4 | 图片头像 | 接取后看卡片 | 显示上传的图片（圆形裁剪），不是字母/表情符号 | |
 | D5 | 缺名称/头像被拒 | API 接取时缺 `name`、头像不是图片（如 `G`、emoji）、或 `avatar` 指向不存在的文件（伪造 `/api/avatars/xxx.png`） | 返回 422 并提示，任务不被接取，不会出现坏图 | |
 | D6 | 多个 agent | 换一个 agentId 接取另一个任务 | 每个卡片显示各自的 agent 头像 | |

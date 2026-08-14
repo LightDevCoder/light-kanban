@@ -85,15 +85,13 @@ function avatarHtml(agent) {
   return `<span class="avatar" style="background:hsl(${hashHue(id)} 60% 45%)">${esc(initial)}</span>`;
 }
 
-// 卡片上的 agent 身份：头像 + 名称（加粗）；名称与 id 不同时把 id 显示成
-// 带「id:」前缀的虚线药丸，避免「名称 + id」连在一起被误读成一个字符串。
+// 卡片上的 agent 身份：头像 + 名称。agentId 只存在于 API 层（接取/归属用），
+// 界面不显示——名称与 id 相同时显示 id 毫无意义，只有在需要区分同名 agent
+// 的不同 session 时才需要 id，而那是 API 层的事。
 function agentChip(task) {
   if (!task.claimedBy) return '';
   const agent = agentById(task.claimedBy) || { id: task.claimedBy, name: task.claimedBy };
-  const id = agent.id || '';
-  const name = agent.name || id;
-  const idPill = name !== id ? `<code class="agent-id" title="agent id">id: ${esc(id)}</code>` : '';
-  return `<span class="agent-chip" title="agent id: ${esc(id)}">${avatarHtml(agent)}<span class="agent-name">${esc(name)}</span>${idPill}</span>`;
+  return `<span class="agent-chip">${avatarHtml(agent)}<span class="agent-name">${esc(agent.name || agent.id)}</span></span>`;
 }
 
 function isSuspectedStuck(task) {

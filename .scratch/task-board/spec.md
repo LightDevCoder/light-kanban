@@ -105,7 +105,7 @@ Status: ready-for-agent
   | `GET /api/avatars/*` | serve stored avatar images |
 
 - **Realtime**: polling only, no WebSocket in v1. The web UI refreshes on an interval; single-user traffic makes this cheap.
-- **Web UI**: the main page is just the four columns. 添加任务 and 归档历史 are top-bar buttons that open modals — task creation happens in a modal, and archived history is a modal list (per-item delete + select-all delete) so a long history never pushes content below the board. There is no agent registration form in the UI: agents self-register via the claim API, and their registered identity (image avatar + name, id shown as a separate pill) appears on the card once they work a task.
+- **Web UI**: the main page is just the four columns. 添加任务 and 归档历史 are top-bar buttons that open modals — task creation happens in a modal, and archived history is a modal list (per-item delete + select-all delete) so a long history never pushes content below the board. There is no agent registration form in the UI: agents self-register via the claim API, and their registered identity (image avatar + name) appears on the card once they work a task. The agentId exists only at the API layer (claiming/ownership — it is what distinguishes the same agent running in different sessions); the UI never displays it.
 - **Board scope**: one global board in v1. All projects' tasks share the four columns; `workspacePath` and tags distinguish them. A `boardId` can be added later without breaking data.
 
 ## Testing Decisions
