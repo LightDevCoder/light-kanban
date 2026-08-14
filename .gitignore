@@ -1,0 +1,15 @@
+# Local toolchain (installed by scripts/fetch-go.cjs)
+.tools/
+
+# Build artifacts
+dist/
+*.exe
+
+# Runtime databases
+*.db
+*.db-shm
+*.db-wal
+
+# Editor/OS noise
+.DS_Store
+Thumbs.db

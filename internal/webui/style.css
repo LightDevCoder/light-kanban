@@ -1,0 +1,19 @@
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  background: #f3f4f6;
+  color: #1f2937;
+}
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: #111827;
+  color: #f9fafb;
+}
+.topbar h1 { margin: 0; font-size: 18px; }
+.connection { font-size: 14px; }
+.connection.ok { color: #22c55e; }
+.connection.bad { color: #ef4444; }
