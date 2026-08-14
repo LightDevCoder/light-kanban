@@ -40,6 +40,36 @@ body {
   cursor: pointer;
   font-size: 13px;
 }
+.ghost-btn {
+  padding: 5px 12px;
+  border: 1px solid #4b5563;
+  border-radius: 6px;
+  background: transparent;
+  color: #e5e7eb;
+  cursor: pointer;
+  font-size: 13px;
+}
+.ghost-btn:hover { background: #1f2937; }
+
+.hidden { display: none; }
+.history { padding: 16px 20px; }
+.history h2 { margin: 0 0 10px; font-size: 16px; }
+.history-list { display: flex; flex-direction: column; gap: 8px; }
+.history-row {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+.history-title { font-size: 14px; font-weight: 600; display: flex; gap: 6px; align-items: center; }
+.history-path { font-size: 12px; color: #6b7280; font-family: Consolas, monospace; }
+.history-tags { display: flex; gap: 4px; margin-top: 4px; }
+.history-when { font-size: 12px; color: #6b7280; white-space: nowrap; }
+.history-empty { color: #6b7280; font-size: 13px; }
 
 .add-task {
   padding: 12px 20px;

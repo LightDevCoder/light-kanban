@@ -343,3 +343,85 @@ func TestBlockUnblockComplete(t *testing.T) {
 		t.Errorf("Complete on todo task = %v, want ErrConflict", err)
 	}
 }
+
+// Issue 05: archive (等你确认 → 已归档, records completedAt) and reject
+// (等你确认 → 处理中). Archived tasks leave the active list and are queryable
+// as history with their completion date.
+func TestArchiveRejectHistory(t *testing.T) {
+	s := mustOpen(t, filepath.Join(t.TempDir(), "test.db"))
+
+	finish := func(id string) {
+		t.Helper()
+		if _, err := s.CreateTask(store.Task{ID: id, Title: id, WorkspacePath: "w"}); err != nil {
+			t.Fatalf("CreateTask: %v", err)
+		}
+		if _, err := s.Claim(id, store.Agent{ID: "a1", Name: "Alpha"}); err != nil {
+			t.Fatalf("Claim: %v", err)
+		}
+		if _, err := s.Complete(id); err != nil {
+			t.Fatalf("Complete: %v", err)
+		}
+	}
+
+	finish("arch")
+	before := time.Now().UTC()
+	archived, err := s.Archive("arch")
+	if err != nil {
+		t.Fatalf("Archive: %v", err)
+	}
+	if archived.Status != store.StatusArchived {
+		t.Errorf("status = %q, want %q", archived.Status, store.StatusArchived)
+	}
+	if archived.CompletedAt == nil {
+		t.Fatal("CompletedAt not recorded on archive")
+	}
+	if archived.CompletedAt.Before(before.Add(-time.Minute)) || archived.CompletedAt.After(time.Now().UTC().Add(time.Minute)) {
+		t.Errorf("CompletedAt = %v, want ~now", archived.CompletedAt)
+	}
+
+	// Wrong-status archive calls conflict.
+	if _, err := s.Archive("arch"); !errors.Is(err, store.ErrConflict) {
+		t.Errorf("Archive on archived task = %v, want ErrConflict", err)
+	}
+
+	// Archived tasks leave the active list…
+	active, err := s.ListTasks("")
+	if err != nil {
+		t.Fatalf("ListTasks: %v", err)
+	}
+	for _, task := range active {
+		if task.ID == "arch" {
+			t.Error("archived task still appears in the active list")
+		}
+	}
+	// …and are queryable as history with completedAt.
+	history, err := s.ListTasks(store.StatusArchived)
+	if err != nil {
+		t.Fatalf("ListTasks(archived): %v", err)
+	}
+	if len(history) != 1 || history[0].ID != "arch" || history[0].CompletedAt == nil {
+		t.Errorf("history = %+v, want the archived task with completedAt", history)
+	}
+
+	// Reject returns the task to the same agent, without a completion date.
+	finish("rej")
+	rejected, err := s.Reject("rej")
+	if err != nil {
+		t.Fatalf("Reject: %v", err)
+	}
+	if rejected.Status != store.StatusInProgress {
+		t.Errorf("after Reject status = %q, want %q", rejected.Status, store.StatusInProgress)
+	}
+	if rejected.ClaimedBy == nil || *rejected.ClaimedBy != "a1" {
+		t.Errorf("claimedBy = %v, want a1 (same agent keeps the task)", rejected.ClaimedBy)
+	}
+	if rejected.CompletedAt != nil {
+		t.Errorf("CompletedAt = %v, want nil after reject", rejected.CompletedAt)
+	}
+	if _, err := s.Reject("rej"); !errors.Is(err, store.ErrConflict) {
+		t.Errorf("Reject on in-progress task = %v, want ErrConflict", err)
+	}
+	if _, err := s.Archive("missing"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("Archive on missing task = %v, want ErrNotFound", err)
+	}
+}

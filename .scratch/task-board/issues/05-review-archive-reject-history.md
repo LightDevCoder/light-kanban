@@ -6,8 +6,8 @@
 
 **Status:** ready-for-agent
 
-- [ ] `POST /api/tasks/:id/archive` moves 等你确认 → 已归档 and sets `completedAt`.
-- [ ] `POST /api/tasks/:id/reject` moves 等你确认 → 处理中.
-- [ ] Archived tasks no longer appear in the four-column board.
-- [ ] `GET /api/tasks?status=archived` returns archived tasks with `completedAt`.
-- [ ] The web UI provides review actions (accept / reject) and an archived-history view.
+- [x] `POST /api/tasks/:id/archive` moves 等你确认 → 已归档 and sets `completedAt`.
+- [x] `POST /api/tasks/:id/reject` moves 等你确认 → 处理中.
+- [x] Archived tasks no longer appear in the four-column board.
+- [x] `GET /api/tasks?status=archived` returns archived tasks with `completedAt`.
+- [x] The web UI provides review actions (accept / reject) and an archived-history view.

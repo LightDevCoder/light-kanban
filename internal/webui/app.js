@@ -101,7 +101,7 @@ function actionsFor(task) {
     case 'blocked':
       return btn('unblock', '解除阻碍');
     case 'awaiting_confirmation':
-      return '';
+      return btn('archive', '验收通过（归档）') + btn('reject', '退回修改');
     default:
       return '';
   }
@@ -168,11 +168,55 @@ async function performAction(action, id) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-  } else if (['block', 'unblock', 'complete'].includes(action)) {
+  } else if (['block', 'unblock', 'complete', 'archive', 'reject'].includes(action)) {
     await api(`/api/tasks/${idEnc}/${action}`, { method: 'POST' });
   }
   await refresh();
 }
+
+// ---- Archived history view ----
+
+const historySection = document.getElementById('history');
+const historyList = document.getElementById('history-list');
+const historyToggle = document.getElementById('history-toggle');
+let historyVisible = false;
+
+async function renderHistory() {
+  const archived = await api('/api/tasks?status=archived');
+  historyList.replaceChildren();
+  if (archived.length === 0) {
+    historyList.innerHTML = '<p class="history-empty">还没有已归档的任务。</p>';
+    return;
+  }
+  for (const task of archived) {
+    const tags = (task.tags || []).map((t) => `<span class="tag">${esc(t)}</span>`).join('');
+    const row = document.createElement('div');
+    row.className = 'history-row';
+    row.innerHTML = `
+      <div class="history-main">
+        <div class="history-title">${esc(task.title)} ${task.type ? `<span class="chip chip-type">${esc(task.type)}</span>` : ''}</div>
+        <div class="history-path">${esc(task.workspacePath)}</div>
+        <div class="history-tags">${tags}</div>
+      </div>
+      <div class="history-when">完成于 ${esc(fmtTime(task.completedAt))}</div>`;
+    historyList.appendChild(row);
+  }
+}
+
+async function toggleHistory() {
+  historyVisible = !historyVisible;
+  historySection.classList.toggle('hidden', !historyVisible);
+  historyToggle.textContent = historyVisible ? '收起历史' : '归档历史';
+  if (historyVisible) {
+    try {
+      await renderHistory();
+    } catch (err) {
+      alert('加载历史失败：' + err.message);
+    }
+  }
+}
+
+historyToggle.addEventListener('click', toggleHistory);
 
 boardEl.addEventListener('click', async (ev) => {
   const btn = ev.target.closest('button[data-action]');

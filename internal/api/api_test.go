@@ -417,3 +417,113 @@ func TestBlockUnblockComplete(t *testing.T) {
 		t.Errorf("task B status in list = %q, want todo", byTitle["B"])
 	}
 }
+
+// driveToAwaiting claims and completes a task so it sits in 等你确认.
+func driveToAwaiting(t *testing.T, ts *httptest.Server, id string) {
+	t.Helper()
+	do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim", `{"agentId":"a1","name":"Alpha"}`)
+	status, raw := do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/complete", "")
+	if status != http.StatusOK {
+		t.Fatalf("complete: status = %d (body: %s)", status, raw)
+	}
+}
+
+// Issue 05: archive moves 等你确认 → 已归档 and records completedAt; the task
+// leaves the four-column board and appears in archived history.
+func TestArchiveRecordsCompletionAndHistory(t *testing.T) {
+	ts := newServer(t)
+	id := createTask(t, ts, "Done")
+	driveToAwaiting(t, ts, id)
+
+	status, raw := do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/archive", "")
+	if status != http.StatusOK {
+		t.Fatalf("archive status = %d, want 200 (body: %s)", status, raw)
+	}
+	task := decodeTask(t, raw)
+	if task["status"] != "archived" {
+		t.Errorf("status = %v, want archived", task["status"])
+	}
+	completedAt, ok := task["completedAt"].(string)
+	if !ok {
+		t.Fatalf("completedAt missing: %s", raw)
+	}
+	if _, err := time.Parse(time.RFC3339, completedAt); err != nil {
+		t.Errorf("completedAt = %q, want RFC3339: %v", completedAt, err)
+	}
+
+	// Gone from the active board…
+	_, raw = do(t, http.MethodGet, ts.URL+"/api/tasks", "")
+	var active []map[string]any
+	if err := json.Unmarshal(raw, &active); err != nil {
+		t.Fatal(err)
+	}
+	for _, task := range active {
+		if task["id"] == id {
+			t.Error("archived task still appears in the active board")
+		}
+	}
+
+	// …queryable in history with its completion date.
+	_, raw = do(t, http.MethodGet, ts.URL+"/api/tasks?status=archived", "")
+	var history []map[string]any
+	if err := json.Unmarshal(raw, &history); err != nil {
+		t.Fatal(err)
+	}
+	if len(history) != 1 || history[0]["id"] != id {
+		t.Fatalf("history = %s, want the archived task", raw)
+	}
+	if history[0]["completedAt"] != completedAt {
+		t.Errorf("history completedAt = %v, want %v", history[0]["completedAt"], completedAt)
+	}
+}
+
+// Issue 05: reject sends a 等你确认 task back to 处理中 with the same agent.
+func TestRejectReturnsToInProgress(t *testing.T) {
+	ts := newServer(t)
+	id := createTask(t, ts, "Revise me")
+	driveToAwaiting(t, ts, id)
+
+	status, raw := do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/reject", "")
+	if status != http.StatusOK {
+		t.Fatalf("reject status = %d, want 200 (body: %s)", status, raw)
+	}
+	task := decodeTask(t, raw)
+	if task["status"] != "in_progress" {
+		t.Errorf("status = %v, want in_progress", task["status"])
+	}
+	if task["claimedBy"] != "a1" {
+		t.Errorf("claimedBy = %v, want a1 (same agent keeps the task)", task["claimedBy"])
+	}
+	if task["completedAt"] != nil {
+		t.Errorf("completedAt = %v, want null after reject", task["completedAt"])
+	}
+}
+
+// Issue 05: review endpoints reject calls from the wrong status.
+func TestReviewRejectsWrongStatus(t *testing.T) {
+	ts := newServer(t)
+	id := createTask(t, ts, "A")
+
+	// 待处理 task: neither archive nor reject applies.
+	status, raw := do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/archive", "")
+	if status != http.StatusConflict {
+		t.Errorf("archive on todo status = %d, want 409 (body: %s)", status, raw)
+	}
+	status, raw = do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/reject", "")
+	if status != http.StatusConflict {
+		t.Errorf("reject on todo status = %d, want 409 (body: %s)", status, raw)
+	}
+
+	// 处理中 task: archive conflicts.
+	do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim", `{"agentId":"a1"}`)
+	status, raw = do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/archive", "")
+	if status != http.StatusConflict {
+		t.Errorf("archive on in_progress status = %d, want 409 (body: %s)", status, raw)
+	}
+
+	// Unknown id.
+	status, _ = do(t, http.MethodPost, ts.URL+"/api/tasks/no-such/archive", "")
+	if status != http.StatusNotFound {
+		t.Errorf("archive on missing task status = %d, want 404", status)
+	}
+}

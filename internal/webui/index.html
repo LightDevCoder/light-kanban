@@ -10,6 +10,7 @@
   <header class="topbar">
     <h1>Light-Kanban 任务看板</h1>
     <div class="topbar-right">
+      <button id="history-toggle" class="ghost-btn" type="button">归档历史</button>
       <form id="identity-form" class="identity" autocomplete="off">
         <label>我是 agent：
           <input name="agentId" placeholder="agentId *" size="10" required>
@@ -37,6 +38,11 @@
   </section>
 
   <main id="board" class="board"></main>
+
+  <section id="history" class="history hidden">
+    <h2>已归档历史</h2>
+    <div id="history-list" class="history-list"></div>
+  </section>
 
   <script src="/app.js"></script>
 </body>

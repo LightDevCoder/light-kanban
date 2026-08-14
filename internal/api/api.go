@@ -28,6 +28,8 @@ func New(s *store.Store, ui fs.FS) http.Handler {
 		r.Post("/{id}/block", transitionHandler(s, s.Block, "block"))
 		r.Post("/{id}/unblock", transitionHandler(s, s.Unblock, "unblock"))
 		r.Post("/{id}/complete", transitionHandler(s, s.Complete, "complete"))
+		r.Post("/{id}/archive", transitionHandler(s, s.Archive, "archive"))
+		r.Post("/{id}/reject", transitionHandler(s, s.Reject, "reject"))
 	})
 	r.Get("/api/agents", handleListAgents(s))
 
