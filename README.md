@@ -24,7 +24,7 @@ Flags:
 
 - Tests run against the HTTP API and the SQLite store (see spec.md's Testing
   Decisions); `go test ./...` runs the whole suite.
-- `make cross` (or `scripts/cross-build.ps1` on Windows) produces the three
-  platform binaries under `dist/`.
+- `make cross` (or `scripts/cross-build.ps1` on Windows) produces the release
+  binaries under `dist/`: linux (amd64), darwin (amd64 + arm64), windows (amd64).
 - The web UI is plain static files embedded via `go:embed` — no frontend build
   step; edit `internal/webui/`.
