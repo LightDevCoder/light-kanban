@@ -10,6 +10,14 @@
   <header class="topbar">
     <h1>Light-Kanban 任务看板</h1>
     <div class="topbar-right">
+      <form id="identity-form" class="identity" autocomplete="off">
+        <label>我是 agent：
+          <input name="agentId" placeholder="agentId *" size="10" required>
+          <input name="name" placeholder="名称" size="8">
+          <input name="avatar" placeholder="头像（emoji）" size="4">
+        </label>
+        <button type="submit" title="保存身份到本地">保存</button>
+      </form>
       <span id="connection" class="connection ok" title="连接状态">●</span>
     </div>
   </header>

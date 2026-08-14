@@ -4,6 +4,7 @@ package api
 import (
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -23,7 +24,9 @@ func New(s *store.Store, ui fs.FS) http.Handler {
 	r.Route("/api/tasks", func(r chi.Router) {
 		r.Get("/", handleListTasks(s))
 		r.Post("/", handleCreateTask(s))
+		r.Post("/{id}/claim", handleClaim(s))
 	})
+	r.Get("/api/agents", handleListAgents(s))
 
 	r.Handle("/*", http.FileServer(http.FS(ui)))
 	return r
@@ -135,5 +138,58 @@ func handleListTasks(s *store.Store) http.HandlerFunc {
 			tasks = []store.Task{}
 		}
 		writeJSON(w, http.StatusOK, tasks)
+	}
+}
+
+type claimRequest struct {
+	AgentID string  `json:"agentId"`
+	Name    string  `json:"name"`
+	Avatar  *string `json:"avatar"`
+}
+
+// handleClaim implements 待处理 → 处理中 with atomicity: the store's single
+// conditional UPDATE guarantees exactly one concurrent claim wins.
+func handleClaim(s *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		var req claimRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid JSON body: "+err.Error())
+			return
+		}
+		req.AgentID = strings.TrimSpace(req.AgentID)
+		if req.AgentID == "" {
+			writeError(w, http.StatusUnprocessableEntity, "agentId is required")
+			return
+		}
+		task, err := s.Claim(id, store.Agent{
+			ID:     req.AgentID,
+			Name:   strings.TrimSpace(req.Name),
+			Avatar: req.Avatar,
+		})
+		switch {
+		case errors.Is(err, store.ErrNotFound):
+			writeError(w, http.StatusNotFound, "task not found")
+		case errors.Is(err, store.ErrConflict):
+			writeError(w, http.StatusConflict, "task is not 待处理 and cannot be claimed")
+		case err != nil:
+			writeError(w, http.StatusInternalServerError, "claim: "+err.Error())
+		default:
+			writeJSON(w, http.StatusOK, task)
+		}
+	}
+}
+
+func handleListAgents(s *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		agents, err := s.ListAgents()
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "list agents: "+err.Error())
+			return
+		}
+		if agents == nil {
+			agents = []store.Agent{}
+		}
+		writeJSON(w, http.StatusOK, agents)
 	}
 }

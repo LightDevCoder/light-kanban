@@ -244,3 +244,98 @@ func TestListTasks(t *testing.T) {
 		t.Errorf("bogus status filter: status = %d, want 400 (body: %s)", status, raw)
 	}
 }
+
+// createTask is a helper: POST a minimal task and return its id.
+func createTask(t *testing.T, ts *httptest.Server, title string) string {
+	t.Helper()
+	status, raw := do(t, http.MethodPost, ts.URL+"/api/tasks", `{"title":"`+title+`","workspacePath":"wa"}`)
+	if status != http.StatusCreated {
+		t.Fatalf("create %s: status = %d (body: %s)", title, status, raw)
+	}
+	return decodeTask(t, raw)["id"].(string)
+}
+
+// Issue 03: claim moves a 待处理 task to 处理中 and records claimedBy.
+func TestClaim(t *testing.T) {
+	ts := newServer(t)
+	id := createTask(t, ts, "A")
+
+	status, raw := do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim",
+		`{"agentId":"a1","name":"Alpha","avatar":"🤖"}`)
+	if status != http.StatusOK {
+		t.Fatalf("claim status = %d, want 200 (body: %s)", status, raw)
+	}
+	task := decodeTask(t, raw)
+	if task["status"] != "in_progress" {
+		t.Errorf("status = %v, want in_progress", task["status"])
+	}
+	if task["claimedBy"] != "a1" {
+		t.Errorf("claimedBy = %v, want a1", task["claimedBy"])
+	}
+
+	// The board list reflects the move.
+	_, raw = do(t, http.MethodGet, ts.URL+"/api/tasks", "")
+	var tasks []map[string]any
+	if err := json.Unmarshal(raw, &tasks); err != nil {
+		t.Fatal(err)
+	}
+	if len(tasks) != 1 || tasks[0]["status"] != "in_progress" || tasks[0]["claimedBy"] != "a1" {
+		t.Errorf("board list after claim = %s", raw)
+	}
+}
+
+// Issue 03: claiming a task not in 待处理 returns a conflict (no state
+// change); unknown ids are 404; missing agentId is 422.
+func TestClaimRejectsWrongStatus(t *testing.T) {
+	ts := newServer(t)
+	id := createTask(t, ts, "A")
+
+	do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim", `{"agentId":"a1"}`)
+
+	status, raw := do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim", `{"agentId":"a2"}`)
+	if status != http.StatusConflict {
+		t.Fatalf("second claim status = %d, want 409 (body: %s)", status, raw)
+	}
+	var errBody map[string]string
+	if err := json.Unmarshal(raw, &errBody); err != nil || errBody["error"] == "" {
+		t.Errorf("conflict body %q has no error message", raw)
+	}
+
+	status, raw = do(t, http.MethodPost, ts.URL+"/api/tasks/no-such/claim", `{"agentId":"a1"}`)
+	if status != http.StatusNotFound {
+		t.Errorf("claim on missing task status = %d, want 404 (body: %s)", status, raw)
+	}
+
+	status, raw = do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim", `{}`)
+	if status != http.StatusUnprocessableEntity {
+		t.Errorf("claim without agentId status = %d, want 422 (body: %s)", status, raw)
+	}
+}
+
+// Issue 03: an unknown agent self-registers when it claims (its identity is
+// then visible through GET /api/agents).
+func TestClaimSelfRegistersAgent(t *testing.T) {
+	ts := newServer(t)
+	id := createTask(t, ts, "A")
+
+	status, raw := do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim",
+		`{"agentId":"newbie","name":"Newbie","avatar":"🦊"}`)
+	if status != http.StatusOK {
+		t.Fatalf("claim status = %d (body: %s)", status, raw)
+	}
+
+	status, raw = do(t, http.MethodGet, ts.URL+"/api/agents", "")
+	if status != http.StatusOK {
+		t.Fatalf("GET /api/agents status = %d, want 200", status)
+	}
+	var agents []map[string]any
+	if err := json.Unmarshal(raw, &agents); err != nil {
+		t.Fatal(err)
+	}
+	if len(agents) != 1 {
+		t.Fatalf("agents = %s, want exactly the self-registered agent", raw)
+	}
+	if agents[0]["id"] != "newbie" || agents[0]["name"] != "Newbie" || agents[0]["avatar"] != "🦊" {
+		t.Errorf("self-registered agent = %s", raw)
+	}
+}

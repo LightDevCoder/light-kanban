@@ -6,8 +6,8 @@
 
 **Status:** ready-for-agent
 
-- [ ] `POST /api/tasks/:id/claim` moves a 待处理 task to 处理中 and records `claimedBy`.
-- [ ] Claiming a task not in 待处理 returns a conflict error (no state change).
-- [ ] Two concurrent claims on the same task result in exactly one success.
-- [ ] Claiming with an unknown `agentId` self-registers that agent (id + name + avatar, or a default avatar).
-- [ ] The web UI shows the claimed card in 处理中 with the agent's avatar.
+- [x] `POST /api/tasks/:id/claim` moves a 待处理 task to 处理中 and records `claimedBy`.
+- [x] Claiming a task not in 待处理 returns a conflict error (no state change).
+- [x] Two concurrent claims on the same task result in exactly one success.
+- [x] Claiming with an unknown `agentId` self-registers that agent (id + name + avatar, or a default avatar).
+- [x] The web UI shows the claimed card in 处理中 with the agent's avatar.

@@ -2,7 +2,9 @@ package store_test
 
 import (
 	"errors"
+	"fmt"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -134,5 +136,144 @@ func TestListTasksReturnsActiveAndRejectsUnknownFilter(t *testing.T) {
 
 	if _, err := s.ListTasks("bogus"); err == nil {
 		t.Error("ListTasks(bogus) should error")
+	}
+}
+
+// Issue 03: claim moves 待处理 → 处理中 and records the agent; a second claim
+// conflicts; claiming a missing task is a not-found.
+func TestClaimTransitionsAndConflicts(t *testing.T) {
+	s := mustOpen(t, filepath.Join(t.TempDir(), "test.db"))
+	task, err := s.CreateTask(store.Task{ID: "t1", Title: "T", WorkspacePath: "w"})
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+
+	claimed, err := s.Claim(task.ID, store.Agent{ID: "a1", Name: "Alpha"})
+	if err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	if claimed.Status != store.StatusInProgress {
+		t.Errorf("status = %q, want %q", claimed.Status, store.StatusInProgress)
+	}
+	if claimed.ClaimedBy == nil || *claimed.ClaimedBy != "a1" {
+		t.Errorf("claimedBy = %v, want a1", claimed.ClaimedBy)
+	}
+
+	if _, err := s.Claim(task.ID, store.Agent{ID: "a2"}); !errors.Is(err, store.ErrConflict) {
+		t.Fatalf("second claim = %v, want ErrConflict", err)
+	}
+	if _, err := s.Claim("missing", store.Agent{ID: "a3"}); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("claim on missing task = %v, want ErrNotFound", err)
+	}
+}
+
+// Issue 03: two (or more) concurrent claims on the same task → exactly one
+// winner, all others conflict. This is the atomicity guarantee.
+func TestClaimConcurrentSingleWinner(t *testing.T) {
+	s := mustOpen(t, filepath.Join(t.TempDir(), "test.db"))
+	task, err := s.CreateTask(store.Task{ID: "t1", Title: "T", WorkspacePath: "w"})
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+
+	const n = 8
+	errs := make(chan error, n)
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			_, err := s.Claim(task.ID, store.Agent{ID: fmt.Sprintf("agent-%d", i), Name: fmt.Sprintf("Agent %d", i)})
+			errs <- err
+		}(i)
+	}
+	wg.Wait()
+	close(errs)
+
+	wins, conflicts := 0, 0
+	for err := range errs {
+		switch {
+		case err == nil:
+			wins++
+		case errors.Is(err, store.ErrConflict):
+			conflicts++
+		default:
+			t.Fatalf("unexpected claim error: %v", err)
+		}
+	}
+	if wins != 1 {
+		t.Fatalf("winners = %d, want exactly 1", wins)
+	}
+	if conflicts != n-1 {
+		t.Fatalf("conflicts = %d, want %d", conflicts, n-1)
+	}
+	got, err := s.GetTask(task.ID)
+	if err != nil {
+		t.Fatalf("GetTask: %v", err)
+	}
+	if got.ClaimedBy == nil {
+		t.Fatal("the winning claim did not record claimedBy")
+	}
+}
+
+// Issue 03: an unknown agent self-registers on claim (id + name + avatar,
+// or a default name derived from the id), and a pre-configured avatar
+// survives a claim that omits avatar.
+func TestClaimSelfRegistersUnknownAgent(t *testing.T) {
+	s := mustOpen(t, filepath.Join(t.TempDir(), "test.db"))
+
+	avatar := "🤖"
+	task, err := s.CreateTask(store.Task{ID: "t1", Title: "T", WorkspacePath: "w"})
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	if _, err := s.Claim(task.ID, store.Agent{ID: "newbie", Name: "Newbie", Avatar: &avatar}); err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	a, err := s.GetAgent("newbie")
+	if err != nil {
+		t.Fatalf("GetAgent: %v", err)
+	}
+	if a.Name != "Newbie" {
+		t.Errorf("name = %q, want Newbie", a.Name)
+	}
+	if a.Avatar == nil || *a.Avatar != avatar {
+		t.Errorf("avatar = %v, want %q", a.Avatar, avatar)
+	}
+
+	// A second agent with no name gets one derived from its id.
+	task2, err := s.CreateTask(store.Task{ID: "t2", Title: "T2", WorkspacePath: "w"})
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	if _, err := s.Claim(task2.ID, store.Agent{ID: "noname"}); err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	a2, err := s.GetAgent("noname")
+	if err != nil {
+		t.Fatalf("GetAgent: %v", err)
+	}
+	if a2.Name != "noname" {
+		t.Errorf("name = %q, want the id as default", a2.Name)
+	}
+
+	// A pre-configured avatar survives a claim that omits avatar.
+	pre := "🦊"
+	if _, err := s.UpsertAgent(store.Agent{ID: "fox", Name: "Fox", Avatar: &pre}); err != nil {
+		t.Fatalf("UpsertAgent: %v", err)
+	}
+	task3, err := s.CreateTask(store.Task{ID: "t3", Title: "T3", WorkspacePath: "w"})
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	if _, err := s.Claim(task3.ID, store.Agent{ID: "fox", Name: "Fox"}); err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	a3, err := s.GetAgent("fox")
+	if err != nil {
+		t.Fatalf("GetAgent: %v", err)
+	}
+	if a3.Avatar == nil || *a3.Avatar != pre {
+		t.Errorf("avatar = %v, want preserved %q", a3.Avatar, pre)
 	}
 }

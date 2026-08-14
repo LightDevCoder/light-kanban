@@ -13,11 +13,33 @@ body {
   padding: 12px 20px;
   background: #111827;
   color: #f9fafb;
+  gap: 12px;
 }
-.topbar h1 { margin: 0; font-size: 18px; }
+.topbar h1 { margin: 0; font-size: 18px; white-space: nowrap; }
+.topbar-right { display: flex; align-items: center; gap: 14px; }
 .connection { font-size: 14px; }
 .connection.ok { color: #22c55e; }
 .connection.bad { color: #ef4444; }
+
+.identity { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #d1d5db; }
+.identity label { display: flex; align-items: center; gap: 6px; }
+.identity input {
+  padding: 4px 8px;
+  border-radius: 5px;
+  border: 1px solid #374151;
+  background: #1f2937;
+  color: #f9fafb;
+  font-size: 13px;
+}
+.identity button {
+  padding: 4px 10px;
+  border: none;
+  border-radius: 5px;
+  background: #374151;
+  color: #f9fafb;
+  cursor: pointer;
+  font-size: 13px;
+}
 
 .add-task {
   padding: 12px 20px;
@@ -98,7 +120,40 @@ body {
   padding: 10px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
-.card-title { margin: 0 0 4px; font-size: 14px; line-height: 1.35; }
+.card-title {
+  margin: 0 0 4px;
+  font-size: 14px;
+  line-height: 1.35;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.agent-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #374151;
+  background: #f3f4f6;
+  border-radius: 999px;
+  padding: 2px 8px 2px 2px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+.avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.avatar-custom { background: #f3f4f6; }
 .card-path {
   font-size: 12px;
   color: #6b7280;
