@@ -11,6 +11,13 @@ API contract. See `CONTEXT.md` for the domain vocabulary.
 
 ![Light-Kanban 看板界面](Assets/light-kanban-example.png)
 
+## 双击使用（不碰命令行）
+
+- **Windows**：下载 `light-kanban.exe` **直接双击** → 弹出黑色控制台窗口，并**自动打开浏览器** http://localhost:8080。首次启动 Windows 防火墙会询问，选「允许访问」。数据（`kanban.db`、`avatars/`）保存在 exe 同目录；**关掉控制台窗口 = 停止服务**，再双击一次就是重启。
+- **macOS**：下载后**右键 → 打开**（首次提示"无法验证开发者"时，右键打开即可绕过）；或终端 `chmod +x light-kanban-darwin-arm64 && ./light-kanban-darwin-arm64`。Finder 直接双击一般没反应，用右键打开或终端运行。
+- **Linux**：`chmod +x light-kanban-linux-amd64 && ./light-kanban-linux-amd64`，浏览器手动打开 http://localhost:8080。
+- 不想自动开浏览器：命令行加 `-no-open`；改端口用 `-addr :9090`。
+
 ## Quick Start
 
 跑通「建任务 → agent 接取 → 干活 → 验收归档」只需 5 步（首次打开网页时也有同款引导向导，之后可点顶栏「使用向导」随时重看）：
