@@ -124,11 +124,14 @@ function cardHtml(task) {
 }
 
 // Status → available actions, shared by every card render.
+// 状态流转（接取/阻碍/解除阻碍/完成/回收/退回）是 agent 通过 API 做的动作，
+// 界面只保留人类的真实操作：每列都有 编辑/删除，「等你确认」另有「验收通过（归档）」；
+// 人工纠正状态走「编辑 → 状态」。
 const STATUS_ACTIONS = {
   todo: [['claim', '接取'], ['edit', '编辑'], ['delete', '删除']],
-  in_progress: [['block', '阻碍'], ['complete', '完成'], ['recycle', '回收'], ['edit', '编辑'], ['delete', '删除']],
-  blocked: [['unblock', '解除阻碍'], ['edit', '编辑'], ['delete', '删除']],
-  awaiting_confirmation: [['archive', '验收通过（归档）'], ['reject', '退回修改'], ['edit', '编辑'], ['delete', '删除']],
+  in_progress: [['edit', '编辑'], ['delete', '删除']],
+  blocked: [['edit', '编辑'], ['delete', '删除']],
+  awaiting_confirmation: [['archive', '验收通过（归档）'], ['edit', '编辑'], ['delete', '删除']],
 };
 
 function actionsFor(task) {
