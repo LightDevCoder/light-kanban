@@ -86,13 +86,13 @@ function avatarHtml(agent) {
 }
 
 // 卡片上的 agent 身份：头像 + 名称（加粗）；名称与 id 不同时把 id 显示成
-// 灰色小药丸，避免「名称 + id」连在一起被误读成一个字符串。
+// 带「id:」前缀的虚线药丸，避免「名称 + id」连在一起被误读成一个字符串。
 function agentChip(task) {
   if (!task.claimedBy) return '';
   const agent = agentById(task.claimedBy) || { id: task.claimedBy, name: task.claimedBy };
   const id = agent.id || '';
   const name = agent.name || id;
-  const idPill = name !== id ? `<code class="agent-id" title="agent id">${esc(id)}</code>` : '';
+  const idPill = name !== id ? `<code class="agent-id" title="agent id">id: ${esc(id)}</code>` : '';
   return `<span class="agent-chip" title="agent id: ${esc(id)}">${avatarHtml(agent)}<span class="agent-name">${esc(name)}</span>${idPill}</span>`;
 }
 

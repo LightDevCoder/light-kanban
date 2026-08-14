@@ -289,12 +289,15 @@ body {
 .agent-chip .agent-id {
   color: #6b7280;
   font-size: 11px;
-  background: #e5e7eb;
+  background: #fff;
+  border: 1px dashed #9ca3af;
   border-radius: 999px;
-  padding: 0 6px;
-  max-width: 140px;
+  padding: 0 7px;
+  max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-family: Consolas, "Courier New", monospace;
+  white-space: nowrap;
 }
 .icon-btn {
   margin-left: auto;
