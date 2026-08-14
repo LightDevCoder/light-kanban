@@ -98,7 +98,18 @@ body {
   padding: 3px 10px 3px 3px;
   font-size: 13px;
 }
-.agent-item code { color: #6b7280; font-size: 12px; }
+.agent-item .agent-name { font-weight: 600; }
+.agent-item .agent-id { color: #6b7280; font-size: 12px; background: #f3f4f6; border-radius: 4px; padding: 1px 5px; }
+.agent-edit {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  border-radius: 6px;
+  font-size: 12px;
+  padding: 2px 8px;
+  cursor: pointer;
+  color: #374151;
+}
+.agent-edit:hover { background: #eef2ff; border-color: #6366f1; }
 
 .modal-backdrop {
   position: fixed;

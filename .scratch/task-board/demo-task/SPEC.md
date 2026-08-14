@@ -8,9 +8,10 @@
 
 1. **接取**：调用 `POST /api/tasks/<id>/claim`，body：
    ```json
-   { "agentId": "demo-agent", "name": "Demo Agent" }
+   { "agentId": "demo-agent", "name": "Demo Agent", "avatar": "https://example.com/icon.png" }
    ```
    `<id>` 从任务卡片的路径里取，或 `GET /api/tasks` 里按标题找「验收测试任务」。
+   注意：看板在注册时强制约束——`name` 必填（用你的工具名，不要用模型名），`avatar` 必填且必须是图片（先 `POST /api/avatars` 上传一张图，或用 http(s) 图片 URL；字母、emoji 会被拒绝）。
 
 2. **读 spec**：本文件就是任务的指令正文（也可以放描述里）。
 

@@ -80,7 +80,7 @@ Status: ready-for-agent
 - **Atomic claim**: claiming is a conditional transition — it succeeds only if the task's current status is 待处理, enforced atomically by the store (single `UPDATE ... WHERE status='待处理'`). A losing concurrent claim gets a "conflict" response, never a duplicate.
 - **Concurrency model**: one task is held by at most one agent at a time; an agent may hold multiple tasks concurrently.
 - **Orphan reclaim**: no automatic lease/heartbeat/TTL in v1. The UI highlights a 处理中 task that has not been updated for a long time as "suspected stuck", and the human recycles it back to 待处理 with one click.
-- **Agent identity**: self-registration on first claim — the claim request carries `agentId` (required) plus `name` and `avatar` (optional; defaults derived from the id). The human can pre-configure agents or edit their avatar afterwards. No authentication in v1 (trust the local machine/network); identity is for display and ownership, not authorization.
+- **Agent identity**: self-registration on claim, with enforced constraints — the claim request carries `agentId`, `name` and `avatar`, all required: `name` must be non-empty (the agent's tool name, e.g. "grok build"), and `avatar` must be an image that the server can verify — an uploaded `/api/avatars/...` path whose file actually exists (fabricated paths are rejected, so cards never show broken icons), or an http(s) image URL. A letter or emoji is rejected. Agents that skip or fake their identity get a 422 and must retry properly. The human can pre-configure agents or edit their identity afterwards; human-configured identities are **pinned** — later claims cannot overwrite them. No authentication in v1 (trust the local machine/network); identity is for display and ownership, not authorization.
 - **Task type / tags**: reserved fields with a convention rather than a rigid enum. Agents (or the human) fill `type` and `tags` themselves; `completedAt` is recorded by the system on archive, not hand-entered.
 - **API contract** (REST, JSON; no auth):
 
@@ -89,7 +89,7 @@ Status: ready-for-agent
   | `GET /api/tasks?status=<s>` | list tasks; default active; `status=archived` for history |
   | `POST /api/tasks` | create a task (human) |
   | `PATCH /api/tasks/:id` | edit title/description/workspacePath/type/tags/dueAt, and manually correct `status` (human; user story 6) |
-  | `POST /api/tasks/:id/claim` | 待处理 → 处理中; body `{agentId, name?, avatar?}` |
+  | `POST /api/tasks/:id/claim` | 待处理 → 处理中; body `{agentId, name, avatar}` — `agentId`、`name` 必填（agent 工具名），`avatar` 必填且必须是图片（`/api/avatars/...` 且文件真实存在，或 http(s) 图片 URL）；注册时强制约束 |
   | `POST /api/tasks/:id/block` | 处理中 → 遇到阻碍 |
   | `POST /api/tasks/:id/unblock` | 遇到阻碍 → 处理中 |
   | `POST /api/tasks/:id/complete` | 处理中 → 等你确认 |

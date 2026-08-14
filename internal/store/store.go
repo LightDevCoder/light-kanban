@@ -96,7 +96,8 @@ CREATE TABLE IF NOT EXISTS tasks (
 CREATE TABLE IF NOT EXISTS agents (
 	id     TEXT PRIMARY KEY,
 	name   TEXT NOT NULL,
-	avatar TEXT
+	avatar TEXT,
+	configured INTEGER NOT NULL DEFAULT 0
 );
 `
 
@@ -117,7 +118,44 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("apply schema: %w", err)
 	}
-	return &Store{db: db}, nil
+	s := &Store{db: db}
+	if err := s.migrate(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("migrate schema: %w", err)
+	}
+	return s, nil
+}
+
+// migrate brings databases created before later schema additions up to date.
+func (s *Store) migrate() error {
+	rows, err := s.db.Query(`PRAGMA table_info(agents)`)
+	if err != nil {
+		return err
+	}
+	hasConfigured := false
+	for rows.Next() {
+		var cid int
+		var name, typ string
+		var notnull, pk int
+		var dflt any
+		if err := rows.Scan(&cid, &name, &typ, &notnull, &dflt, &pk); err != nil {
+			rows.Close()
+			return err
+		}
+		if name == "configured" {
+			hasConfigured = true
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if !hasConfigured {
+		if _, err := s.db.Exec(`ALTER TABLE agents ADD COLUMN configured INTEGER NOT NULL DEFAULT 0`); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Close releases the underlying database.
@@ -365,8 +403,8 @@ func (s *Store) Claim(id string, a Agent) (Task, error) {
 
 	// Self-register (or refresh) the agent: a new row defaults its name to
 	// the id; a known agent keeps its display name/avatar when the claim
-	// omits them.
-	if err := upsertAgent(tx, a); err != nil {
+	// omits them; a human-configured agent keeps them no matter what.
+	if err := upsertAgentClaim(tx, a); err != nil {
 		return Task{}, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -456,20 +494,39 @@ func (s *Store) SetStatus(id string, status Status) (Task, error) {
 	return s.GetTask(id)
 }
 
-// upsertAgentSQL inserts or updates an agent's display identity. A new row
-// defaults its name to the id; an existing agent keeps its name and avatar
-// when the incoming values are empty.
-const upsertAgentSQL = `INSERT INTO agents (id, name, avatar) VALUES (?, COALESCE(NULLIF(?, ''), ?), ?)
+// upsertAgentClaimSQL inserts or updates an agent when an agent claims a
+// task. A new row defaults its name to the id and is self-registered
+// (configured=0); a human-configured agent (configured=1) keeps its pinned
+// name and avatar no matter what the claim sends; otherwise the claim's
+// values apply, with empty name/avatar preserving existing ones.
+const upsertAgentClaimSQL = `INSERT INTO agents (id, name, avatar, configured) VALUES (?, COALESCE(NULLIF(?, ''), ?), ?, 0)
+	ON CONFLICT(id) DO UPDATE SET
+		name = CASE WHEN agents.configured = 1 THEN agents.name
+		            WHEN ? = '' THEN agents.name
+		            ELSE excluded.name END,
+		avatar = CASE WHEN agents.configured = 1 THEN agents.avatar
+		              ELSE COALESCE(excluded.avatar, agents.avatar) END,
+		configured = agents.configured`
+
+// upsertAgentConfigSQL is the human's pre-configuration path (POST /api/agents):
+// it always applies the given name/avatar and pins the identity.
+const upsertAgentConfigSQL = `INSERT INTO agents (id, name, avatar, configured) VALUES (?, COALESCE(NULLIF(?, ''), ?), ?, 1)
 	ON CONFLICT(id) DO UPDATE SET
 		name = CASE WHEN ? = '' THEN agents.name ELSE excluded.name END,
-		avatar = COALESCE(excluded.avatar, agents.avatar)`
+		avatar = COALESCE(excluded.avatar, agents.avatar),
+		configured = 1`
 
 type execer interface {
 	Exec(query string, args ...any) (sql.Result, error)
 }
 
-func upsertAgent(exec execer, a Agent) error {
-	_, err := exec.Exec(upsertAgentSQL, a.ID, a.Name, a.ID, strPtr(a.Avatar), a.Name)
+func upsertAgentClaim(exec execer, a Agent) error {
+	_, err := exec.Exec(upsertAgentClaimSQL, a.ID, a.Name, a.ID, strPtr(a.Avatar), a.Name)
+	return err
+}
+
+func upsertAgentConfig(exec execer, a Agent) error {
+	_, err := exec.Exec(upsertAgentConfigSQL, a.ID, a.Name, a.ID, strPtr(a.Avatar), a.Name)
 	return err
 }
 
@@ -523,9 +580,10 @@ func (s *Store) GetAgent(id string) (Agent, error) {
 
 // UpsertAgent pre-configures or updates an agent's display identity.
 // A new agent defaults its name to the id; an existing agent keeps its
-// name when the update omits one.
+// name when the update omits one. The identity is pinned: later claims
+// by this agent cannot overwrite it.
 func (s *Store) UpsertAgent(a Agent) (Agent, error) {
-	if err := upsertAgent(s.db, a); err != nil {
+	if err := upsertAgentConfig(s.db, a); err != nil {
 		return Agent{}, err
 	}
 	return s.GetAgent(a.ID)

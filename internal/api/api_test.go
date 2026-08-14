@@ -29,7 +29,20 @@ func newServer(t *testing.T) *httptest.Server {
 		t.Fatalf("open store: %v", err)
 	}
 	t.Cleanup(func() { _ = s.Close() })
-	ts := httptest.NewServer(api.New(s, webui.FS, filepath.Join(t.TempDir(), "avatars")))
+	avatarsDir := filepath.Join(t.TempDir(), "avatars")
+	// Seed a real avatar image so claims can reference an existing upload.
+	if err := os.MkdirAll(avatarsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	png, err := base64.StdEncoding.DecodeString(
+		"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(avatarsDir, "face.png"), png, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(api.New(s, webui.FS, avatarsDir))
 	t.Cleanup(ts.Close)
 	return ts
 }
@@ -260,13 +273,84 @@ func createTask(t *testing.T, ts *httptest.Server, title string) string {
 	return decodeTask(t, raw)["id"].(string)
 }
 
+// goodClaim is a compliant claim body: agentId + name + image avatar.
+// Claims are constrained at registration: name is required and the avatar
+// must be an image (uploaded path or image URL), never a letter or emoji.
+const goodClaim = `{"agentId":"a1","name":"Alpha","avatar":"/api/avatars/face.png"}`
+
+// Issue: claims are constrained at registration time so agents self-register
+// with a proper tool name and an image icon.
+func TestClaimRequiresIdentity(t *testing.T) {
+	ts := newServer(t)
+	id := createTask(t, ts, "A")
+	id2 := createTask(t, ts, "B")
+
+	// A name is required.
+	status, raw := do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim",
+		`{"agentId":"a1","avatar":"/api/avatars/face.png"}`)
+	if status != http.StatusUnprocessableEntity || !strings.Contains(string(raw), "name is required") {
+		t.Errorf("missing name: status = %d, want 422 with message (body: %s)", status, raw)
+	}
+
+	// The avatar must be an image, not a letter or emoji.
+	status, raw = do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim",
+		`{"agentId":"a1","name":"Alpha","avatar":"G"}`)
+	if status != http.StatusUnprocessableEntity || !strings.Contains(string(raw), "avatar") {
+		t.Errorf("letter avatar: status = %d, want 422 with message (body: %s)", status, raw)
+	}
+	status, raw = do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim",
+		`{"agentId":"a1","name":"Alpha","avatar":"🤖"}`)
+	if status != http.StatusUnprocessableEntity {
+		t.Errorf("emoji avatar: status = %d, want 422 (body: %s)", status, raw)
+	}
+	status, raw = do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim",
+		`{"agentId":"a1","name":"Alpha"}`)
+	if status != http.StatusUnprocessableEntity {
+		t.Errorf("missing avatar: status = %d, want 422 (body: %s)", status, raw)
+	}
+
+	// Uploaded image paths and https image URLs are accepted.
+	status, raw = do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim", goodClaim)
+	if status != http.StatusOK {
+		t.Errorf("uploaded avatar claim: status = %d, want 200 (body: %s)", status, raw)
+	}
+	status, raw = do(t, http.MethodPost, ts.URL+"/api/tasks/"+id2+"/claim",
+		`{"agentId":"a2","name":"Beta","avatar":"https://example.com/icon.png"}`)
+	if status != http.StatusOK {
+		t.Errorf("https avatar claim: status = %d, want 200 (body: %s)", status, raw)
+	}
+}
+
+// Issue: an avatar must reference an image that actually exists on the
+// server — a fabricated /api/avatars/ path is rejected at claim time
+// instead of rendering as a broken image on the card.
+func TestClaimRejectsMissingAvatarImage(t *testing.T) {
+	ts := newServer(t)
+	id := createTask(t, ts, "A")
+
+	status, raw := do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim",
+		`{"agentId":"a1","name":"Alpha","avatar":"/api/avatars/nope.png"}`)
+	if status != http.StatusUnprocessableEntity || !strings.Contains(string(raw), "avatar") {
+		t.Fatalf("fabricated avatar path: status = %d, want 422 (body: %s)", status, raw)
+	}
+
+	// The task was not claimed.
+	_, raw = do(t, http.MethodGet, ts.URL+"/api/tasks", "")
+	var tasks []map[string]any
+	if err := json.Unmarshal(raw, &tasks); err != nil {
+		t.Fatal(err)
+	}
+	if len(tasks) != 1 || tasks[0]["status"] != "todo" {
+		t.Errorf("task state after rejected claim = %s", raw)
+	}
+}
+
 // Issue 03: claim moves a 待处理 task to 处理中 and records claimedBy.
 func TestClaim(t *testing.T) {
 	ts := newServer(t)
 	id := createTask(t, ts, "A")
 
-	status, raw := do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim",
-		`{"agentId":"a1","name":"Alpha","avatar":"🤖"}`)
+	status, raw := do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim", goodClaim)
 	if status != http.StatusOK {
 		t.Fatalf("claim status = %d, want 200 (body: %s)", status, raw)
 	}
@@ -295,9 +379,10 @@ func TestClaimRejectsWrongStatus(t *testing.T) {
 	ts := newServer(t)
 	id := createTask(t, ts, "A")
 
-	do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim", `{"agentId":"a1"}`)
+	do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim", goodClaim)
 
-	status, raw := do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim", `{"agentId":"a2"}`)
+	status, raw := do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim",
+		`{"agentId":"a2","name":"Alpha2","avatar":"/api/avatars/face.png"}`)
 	if status != http.StatusConflict {
 		t.Fatalf("second claim status = %d, want 409 (body: %s)", status, raw)
 	}
@@ -306,7 +391,7 @@ func TestClaimRejectsWrongStatus(t *testing.T) {
 		t.Errorf("conflict body %q has no error message", raw)
 	}
 
-	status, raw = do(t, http.MethodPost, ts.URL+"/api/tasks/no-such/claim", `{"agentId":"a1"}`)
+	status, raw = do(t, http.MethodPost, ts.URL+"/api/tasks/no-such/claim", goodClaim)
 	if status != http.StatusNotFound {
 		t.Errorf("claim on missing task status = %d, want 404 (body: %s)", status, raw)
 	}
@@ -324,7 +409,7 @@ func TestClaimSelfRegistersAgent(t *testing.T) {
 	id := createTask(t, ts, "A")
 
 	status, raw := do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim",
-		`{"agentId":"newbie","name":"Newbie","avatar":"🦊"}`)
+		`{"agentId":"newbie","name":"Newbie","avatar":"/api/avatars/face.png"}`)
 	if status != http.StatusOK {
 		t.Fatalf("claim status = %d (body: %s)", status, raw)
 	}
@@ -340,7 +425,7 @@ func TestClaimSelfRegistersAgent(t *testing.T) {
 	if len(agents) != 1 {
 		t.Fatalf("agents = %s, want exactly the self-registered agent", raw)
 	}
-	if agents[0]["id"] != "newbie" || agents[0]["name"] != "Newbie" || agents[0]["avatar"] != "🦊" {
+	if agents[0]["id"] != "newbie" || agents[0]["name"] != "Newbie" || agents[0]["avatar"] != "/api/avatars/face.png" {
 		t.Errorf("self-registered agent = %s", raw)
 	}
 }
@@ -350,7 +435,7 @@ func TestClaimSelfRegistersAgent(t *testing.T) {
 func TestBlockUnblockComplete(t *testing.T) {
 	ts := newServer(t)
 	id := createTask(t, ts, "A")
-	do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim", `{"agentId":"a1"}`)
+	do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim", goodClaim)
 
 	status, raw := do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/block", "")
 	if status != http.StatusOK {
@@ -426,7 +511,7 @@ func TestBlockUnblockComplete(t *testing.T) {
 // driveToAwaiting claims and completes a task so it sits in 等你确认.
 func driveToAwaiting(t *testing.T, ts *httptest.Server, id string) {
 	t.Helper()
-	do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim", `{"agentId":"a1","name":"Alpha"}`)
+	do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim", goodClaim)
 	status, raw := do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/complete", "")
 	if status != http.StatusOK {
 		t.Fatalf("complete: status = %d (body: %s)", status, raw)
@@ -520,7 +605,7 @@ func TestReviewRejectsWrongStatus(t *testing.T) {
 	}
 
 	// 处理中 task: archive conflicts.
-	do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim", `{"agentId":"a1"}`)
+	do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim", goodClaim)
 	status, raw = do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/archive", "")
 	if status != http.StatusConflict {
 		t.Errorf("archive on in_progress status = %d, want 409 (body: %s)", status, raw)
@@ -845,7 +930,7 @@ func TestDeleteTask(t *testing.T) {
 
 	// Delete a claimed, in-progress task.
 	id := createTask(t, ts, "Junk")
-	do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim", `{"agentId":"a1"}`)
+	do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim", goodClaim)
 	status, raw := do(t, http.MethodDelete, ts.URL+"/api/tasks/"+id, "")
 	if status != http.StatusNoContent {
 		t.Fatalf("DELETE status = %d, want 204 (body: %s)", status, raw)
@@ -934,6 +1019,29 @@ func TestPreconfigureAgent(t *testing.T) {
 	if a["name"] != "justid" {
 		t.Errorf("default name = %v, want the id", a["name"])
 	}
+
+	// A pre-configured identity is pinned: a claim that sends its own
+	// name/avatar cannot overwrite the human's configuration.
+	claimID := createTask(t, ts, "Pinned claim")
+	status, raw = do(t, http.MethodPost, ts.URL+"/api/tasks/"+claimID+"/claim",
+		`{"agentId":"pre","name":"grok-4.5","avatar":"/api/avatars/face.png"}`)
+	if status != http.StatusOK {
+		t.Fatalf("claim status = %d (body: %s)", status, raw)
+	}
+	_, raw = do(t, http.MethodGet, ts.URL+"/api/agents", "")
+	if err := json.Unmarshal(raw, &agents); err != nil {
+		t.Fatal(err)
+	}
+	if len(agents) != 2 {
+		t.Fatalf("agents = %s, want the two registered agents", raw)
+	}
+	for _, agent := range agents {
+		if agent["id"] == "pre" {
+			if agent["name"] != "Pre Agent" || agent["avatar"] != "🐉" {
+				t.Errorf("pinned identity overwritten: %s", raw)
+			}
+		}
+	}
 }
 
 // Issue 07: the human recycles a 处理中 task back to 待处理 in one action;
@@ -942,7 +1050,7 @@ func TestRecycleOrphan(t *testing.T) {
 	ts := newServer(t)
 	id := createTask(t, ts, "Orphan")
 
-	do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim", `{"agentId":"a1"}`)
+	do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim", goodClaim)
 
 	status, raw := do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/recycle", "")
 	if status != http.StatusOK {
@@ -957,7 +1065,8 @@ func TestRecycleOrphan(t *testing.T) {
 	}
 
 	// Any agent can claim it again.
-	status, raw = do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim", `{"agentId":"a2","name":"Beta"}`)
+	status, raw = do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim",
+		`{"agentId":"a2","name":"Beta","avatar":"/api/avatars/face.png"}`)
 	if status != http.StatusOK {
 		t.Fatalf("re-claim status = %d, want 200 (body: %s)", status, raw)
 	}

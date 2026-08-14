@@ -33,7 +33,7 @@ func New(s *store.Store, ui fs.FS, avatarsDir string) http.Handler {
 		r.Post("/", handleCreateTask(s))
 		r.Patch("/{id}", handlePatchTask(s))
 		r.Delete("/{id}", handleDeleteTask(s))
-		r.Post("/{id}/claim", handleClaim(s))
+		r.Post("/{id}/claim", handleClaim(s, avatarsDir))
 		r.Post("/{id}/block", transitionHandler(s, s.Block, "block"))
 		r.Post("/{id}/unblock", transitionHandler(s, s.Unblock, "unblock"))
 		r.Post("/{id}/complete", transitionHandler(s, s.Complete, "complete"))
@@ -168,9 +168,32 @@ type claimRequest struct {
 	Avatar  *string `json:"avatar"`
 }
 
+// validateAvatar checks an avatar reference at claim time: uploaded
+// /api/avatars/ paths must point at a file that actually exists on the
+// server (no fabricated paths → no broken images on cards); http(s) image
+// URLs are accepted as-is.
+func validateAvatar(dir, v string) error {
+	if strings.HasPrefix(v, "/api/avatars/") {
+		name := filepath.Base(v)
+		if name == "." || name == ".." {
+			return errors.New("avatar must be an uploaded image")
+		}
+		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+			return errors.New("avatar image not found — upload it via POST /api/avatars first")
+		}
+		return nil
+	}
+	if strings.HasPrefix(v, "http://") || strings.HasPrefix(v, "https://") {
+		return nil
+	}
+	return errors.New("avatar must be an uploaded image or an http(s) image URL")
+}
+
 // handleClaim implements 待处理 → 处理中 with atomicity: the store's single
-// conditional UPDATE guarantees exactly one concurrent claim wins.
-func handleClaim(s *store.Store) http.HandlerFunc {
+// conditional UPDATE guarantees exactly one concurrent claim wins. Agents
+// self-register here, so the claim must carry a proper identity: a non-empty
+// tool name and an image avatar that exists on the server.
+func handleClaim(s *store.Store, avatarsDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		var req claimRequest
@@ -183,9 +206,22 @@ func handleClaim(s *store.Store) http.HandlerFunc {
 			writeError(w, http.StatusUnprocessableEntity, "agentId is required")
 			return
 		}
+		req.Name = strings.TrimSpace(req.Name)
+		if req.Name == "" {
+			writeError(w, http.StatusUnprocessableEntity, "name is required (use your agent tool name, e.g. \"grok build\")")
+			return
+		}
+		if req.Avatar == nil {
+			writeError(w, http.StatusUnprocessableEntity, "avatar is required and must be an image (upload it, or give an http(s) image URL)")
+			return
+		}
+		if err := validateAvatar(avatarsDir, *req.Avatar); err != nil {
+			writeError(w, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
 		task, err := s.Claim(id, store.Agent{
 			ID:     req.AgentID,
-			Name:   strings.TrimSpace(req.Name),
+			Name:   req.Name,
 			Avatar: req.Avatar,
 		})
 		if err != nil {

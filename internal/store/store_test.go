@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -298,6 +299,93 @@ func TestClaimSelfRegistersUnknownAgent(t *testing.T) {
 	}
 	if a4.Name != "Recurring Agent" {
 		t.Errorf("name = %q, want preserved %q (not the id)", a4.Name, "Recurring Agent")
+	}
+}
+
+// A human-pre-configured agent's identity is pinned: later claims that send
+// their own name/avatar cannot overwrite it (spec user story 12 — recurring
+// agents show recognizable icons, no matter what the agent claims with).
+func TestConfiguredAgentIdentityIsPinned(t *testing.T) {
+	s := mustOpen(t, filepath.Join(t.TempDir(), "test.db"))
+
+	icon := "/api/avatars/grok-icon.png"
+	if _, err := s.UpsertAgent(store.Agent{ID: "grok-build", Name: "grok build", Avatar: &icon}); err != nil {
+		t.Fatalf("UpsertAgent: %v", err)
+	}
+
+	task, err := s.CreateTask(store.Task{ID: "t1", Title: "T", WorkspacePath: "w"})
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	// The agent claims with a model-name and a text avatar — both must lose.
+	if _, err := s.Claim(task.ID, store.Agent{ID: "grok-build", Name: "grok-4.5", Avatar: strPtr2("G")}); err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	a, err := s.GetAgent("grok-build")
+	if err != nil {
+		t.Fatalf("GetAgent: %v", err)
+	}
+	if a.Name != "grok build" {
+		t.Errorf("name = %q, want the pinned %q", a.Name, "grok build")
+	}
+	if a.Avatar == nil || *a.Avatar != icon {
+		t.Errorf("avatar = %v, want the pinned icon", a.Avatar)
+	}
+
+	// A self-registered (non-configured) agent still updates from claims.
+	task2, err := s.CreateTask(store.Task{ID: "t2", Title: "T2", WorkspacePath: "w"})
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	if _, err := s.Claim(task2.ID, store.Agent{ID: "loose", Name: "first name"}); err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	task3, err := s.CreateTask(store.Task{ID: "t3", Title: "T3", WorkspacePath: "w"})
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	if _, err := s.Claim(task3.ID, store.Agent{ID: "loose", Name: "second name"}); err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	loose, err := s.GetAgent("loose")
+	if err != nil {
+		t.Fatalf("GetAgent: %v", err)
+	}
+	if loose.Name != "second name" {
+		t.Errorf("self-registered name = %q, want updated %q", loose.Name, "second name")
+	}
+}
+
+// Open migrates a database created before the configured column existed.
+func TestOpenMigratesLegacyAgentsTable(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "legacy.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`CREATE TABLE agents (id TEXT PRIMARY KEY, name TEXT NOT NULL, avatar TEXT)`); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+
+	s := mustOpen(t, path)
+	if _, err := s.UpsertAgent(store.Agent{ID: "legacy", Name: "Legacy"}); err != nil {
+		t.Fatalf("UpsertAgent on migrated db: %v", err)
+	}
+	// The migrated row is treated as human-configured: claims can't rename it.
+	task, err := s.CreateTask(store.Task{ID: "t1", Title: "T", WorkspacePath: "w"})
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	if _, err := s.Claim(task.ID, store.Agent{ID: "legacy", Name: "sneaky"}); err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	legacy, err := s.GetAgent("legacy")
+	if err != nil {
+		t.Fatalf("GetAgent: %v", err)
+	}
+	if legacy.Name != "Legacy" {
+		t.Errorf("migrated agent name = %q, want pinned %q", legacy.Name, "Legacy")
 	}
 }
 

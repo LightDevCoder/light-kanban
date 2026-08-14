@@ -262,7 +262,15 @@ function wireIdentityForm() {
       return;
     }
     const name = form.elements.name.value.trim();
+    if (!name) {
+      alert('名称必填（用 agent 工具名，如 "grok build"，而不是模型名）。');
+      return;
+    }
     const file = form.elements.avatarFile.files && form.elements.avatarFile.files[0];
+    if (!file && !savedIdentity.avatar) {
+      alert('头像必填：请选择一张图片（接取时服务端会强制校验名称与图片头像）。');
+      return;
+    }
     try {
       let avatar = savedIdentity.avatar || '';
       if (file) {
@@ -423,10 +431,22 @@ function renderAgentList() {
   for (const agent of agents) {
     const li = document.createElement('li');
     li.className = 'agent-item';
-    li.innerHTML = `${avatarHtml(agent)}<span class="agent-name">${esc(agent.name || agent.id)}</span><code>${esc(agent.id)}</code>`;
+    li.innerHTML = `${avatarHtml(agent)}<span class="agent-name">${esc(agent.name || agent.id)}</span><code class="agent-id" title="agent id">${esc(agent.id)}</code>
+      <button type="button" class="agent-edit" data-agent-id="${esc(agent.id)}" data-agent-name="${esc(agent.name || '')}" title="把该 agent 的 id/名称填进表单以便修正">编辑</button>`;
     agentList.appendChild(li);
   }
 }
+
+// 修正 agent 身份：点列表里的「编辑」→ 改名称 / 上传图标 → 保存（保存后钉死，agent 接取时覆盖不了）。
+agentList.addEventListener('click', (ev) => {
+  const btn = ev.target.closest('button.agent-edit');
+  if (!btn) return;
+  agentForm.elements.id.value = btn.dataset.agentId || '';
+  agentForm.elements.name.value = btn.dataset.agentName || '';
+  agentForm.elements.avatarFile.value = '';
+  document.getElementById('agents-details').open = true;
+  agentForm.elements.name.focus();
+});
 
 agentForm.addEventListener('submit', async (ev) => {
   ev.preventDefault();
