@@ -11,12 +11,54 @@ API contract. See `CONTEXT.md` for the domain vocabulary.
 
 ![Light-Kanban 看板界面](Assets/light-kanban-example.png)
 
-## 双击使用（不碰命令行）
+## 安装与运行（按平台）
 
-- **Windows**：下载 `light-kanban.exe` **直接双击** → 弹出黑色控制台窗口，并**自动打开浏览器** http://localhost:8080。首次启动 Windows 防火墙会询问，选「允许访问」。数据（`kanban.db`、`avatars/`）保存在 exe 同目录；**关掉控制台窗口 = 停止服务**，再双击一次就是重启。
-- **macOS**：下载后**右键 → 打开**（首次提示"无法验证开发者"时，右键打开即可绕过）；或终端 `chmod +x light-kanban-darwin-arm64 && ./light-kanban-darwin-arm64`。Finder 直接双击一般没反应，用右键打开或终端运行。
-- **Linux**：`chmod +x light-kanban-linux-amd64 && ./light-kanban-linux-amd64`，浏览器手动打开 http://localhost:8080。
-- 不想自动开浏览器：命令行加 `-no-open`；改端口用 `-addr :9090`。
+先下载对应你电脑的二进制（Releases 页面）：
+
+| 你的电脑 | 下载文件 |
+| --- | --- |
+| Windows | `light-kanban.exe` |
+| macOS Apple Silicon（M 系列） | `light-kanban-darwin-arm64` |
+| macOS Intel | `light-kanban-darwin-amd64` |
+| Linux | `light-kanban-linux-amd64` |
+
+启动后会**自动打开浏览器** http://localhost:8080（不想自动开：加 `-no-open`；换端口：`-addr :9090`）。数据（`kanban.db`、`avatars/`）保存在**你运行命令时所在的文件夹**，建议专门建一个文件夹放二进制和数据。
+
+### Windows（可以纯双击）
+
+直接**双击** `light-kanban.exe` → 弹出黑色控制台窗口并自动打开浏览器。首次启动防火墙会询问，选「允许访问」。**关掉控制台窗口 = 停止服务**，再双击一次就是重启。
+
+### macOS（终端运行，3 步）
+
+1. **下载并放到专用文件夹**（不要把数据留在「下载」里）：
+
+   ```sh
+   mkdir -p ~/light-kanban && cd ~/light-kanban
+   # 把 light-kanban-darwin-arm64 移到这个文件夹（Intel Mac 用 darwin-amd64）
+   ```
+
+2. **给执行权限并启动**：
+
+   ```sh
+   chmod +x light-kanban-darwin-arm64
+   ./light-kanban-darwin-arm64
+   ```
+
+   首次运行如果提示"无法验证开发者"，任选其一：
+   - Finder 里**右键 → 打开**（在弹窗里再点「打开」，只需一次）；或
+   - 系统设置 → 隐私与安全性 → 找到 light-kanban → 点「仍要打开」；或
+   - 终端执行 `xattr -dr com.apple.quarantine light-kanban-darwin-arm64` 后重跑
+
+3. **使用**：浏览器自动打开看板；终端里 **Ctrl+C 停止**，再次运行就是重启。如果 macOS 防火墙询问"允许 incoming connections"，只有需要让**其他电脑**上的 agent 连过来时才选允许（只用本机的话选拒绝也能用）。
+
+### Linux（终端运行）
+
+```sh
+chmod +x light-kanban-linux-amd64
+./light-kanban-linux-amd64
+```
+
+浏览器自动打开看板，Ctrl+C 停止。需要让局域网其他电脑访问时，用 `-addr :8080` 启动并放行防火墙端口。
 
 ## Quick Start
 
