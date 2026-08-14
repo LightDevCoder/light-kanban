@@ -7,6 +7,10 @@ for human confirmation. Single Go binary: REST API + SQLite + embedded web UI.
 See `.scratch/task-board/spec.md` for the full spec, the state machine, and the
 API contract. See `CONTEXT.md` for the domain vocabulary.
 
+## Screenshots
+
+![Light-Kanban 看板界面](Assets/light-kanban-example.png)
+
 ## Quick Start
 
 跑通「建任务 → agent 接取 → 干活 → 验收归档」只需 5 步（首次打开网页时也有同款引导向导，之后可点顶栏「使用向导」随时重看）：
