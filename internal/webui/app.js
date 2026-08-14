@@ -91,11 +91,20 @@ function cardHtml(task) {
 }
 
 function actionsFor(task) {
-  const id = encodeURIComponent(task.id);
-  if (task.status === 'todo') {
-    return `<button data-action="claim" data-id="${esc(task.id)}">接取</button>`;
+  const id = esc(task.id);
+  const btn = (action, label) => `<button data-action="${action}" data-id="${id}">${label}</button>`;
+  switch (task.status) {
+    case 'todo':
+      return btn('claim', '接取');
+    case 'in_progress':
+      return btn('block', '阻碍') + btn('complete', '完成');
+    case 'blocked':
+      return btn('unblock', '解除阻碍');
+    case 'awaiting_confirmation':
+      return '';
+    default:
+      return '';
   }
-  return '';
 }
 
 function render() {
@@ -159,6 +168,8 @@ async function performAction(action, id) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
+  } else if (['block', 'unblock', 'complete'].includes(action)) {
+    await api(`/api/tasks/${idEnc}/${action}`, { method: 'POST' });
   }
   await refresh();
 }

@@ -25,6 +25,9 @@ func New(s *store.Store, ui fs.FS) http.Handler {
 		r.Get("/", handleListTasks(s))
 		r.Post("/", handleCreateTask(s))
 		r.Post("/{id}/claim", handleClaim(s))
+		r.Post("/{id}/block", transitionHandler(s, s.Block, "block"))
+		r.Post("/{id}/unblock", transitionHandler(s, s.Unblock, "unblock"))
+		r.Post("/{id}/complete", transitionHandler(s, s.Complete, "complete"))
 	})
 	r.Get("/api/agents", handleListAgents(s))
 
@@ -191,5 +194,24 @@ func handleListAgents(s *store.Store) http.HandlerFunc {
 			agents = []store.Agent{}
 		}
 		writeJSON(w, http.StatusOK, agents)
+	}
+}
+
+// transitionHandler maps a store status transition (block/unblock/complete/…)
+// onto HTTP: 200 with the moved task, 409 on wrong status, 404 on missing id.
+func transitionHandler(s *store.Store, action func(id string) (store.Task, error), verb string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		task, err := action(id)
+		switch {
+		case errors.Is(err, store.ErrNotFound):
+			writeError(w, http.StatusNotFound, "task not found")
+		case errors.Is(err, store.ErrConflict):
+			writeError(w, http.StatusConflict, "task is not in the required status for "+verb)
+		case err != nil:
+			writeError(w, http.StatusInternalServerError, verb+": "+err.Error())
+		default:
+			writeJSON(w, http.StatusOK, task)
+		}
 	}
 }

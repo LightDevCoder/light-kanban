@@ -6,8 +6,8 @@
 
 **Status:** ready-for-agent
 
-- [ ] `POST /api/tasks/:id/block` moves 处理中 → 遇到阻碍.
-- [ ] `POST /api/tasks/:id/unblock` moves 遇到阻碍 → 处理中.
-- [ ] `POST /api/tasks/:id/complete` moves 处理中 → 等你确认.
-- [ ] Each endpoint rejects calls from the wrong status with a conflict error.
-- [ ] The web UI shows the card in the correct column after each transition.
+- [x] `POST /api/tasks/:id/block` moves 处理中 → 遇到阻碍.
+- [x] `POST /api/tasks/:id/unblock` moves 遇到阻碍 → 处理中.
+- [x] `POST /api/tasks/:id/complete` moves 处理中 → 等你确认.
+- [x] Each endpoint rejects calls from the wrong status with a conflict error.
+- [x] The web UI shows the card in the correct column after each transition.

@@ -339,3 +339,81 @@ func TestClaimSelfRegistersAgent(t *testing.T) {
 		t.Errorf("self-registered agent = %s", raw)
 	}
 }
+
+// Issue 04: block / unblock / complete move the card through the lifecycle,
+// each rejecting calls from the wrong status with a conflict.
+func TestBlockUnblockComplete(t *testing.T) {
+	ts := newServer(t)
+	id := createTask(t, ts, "A")
+	do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim", `{"agentId":"a1"}`)
+
+	status, raw := do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/block", "")
+	if status != http.StatusOK {
+		t.Fatalf("block status = %d, want 200 (body: %s)", status, raw)
+	}
+	if decodeTask(t, raw)["status"] != "blocked" {
+		t.Errorf("after block: %s", raw)
+	}
+
+	status, raw = do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/block", "")
+	if status != http.StatusConflict {
+		t.Errorf("block on blocked task status = %d, want 409 (body: %s)", status, raw)
+	}
+	var errBody map[string]string
+	if err := json.Unmarshal(raw, &errBody); err != nil || errBody["error"] == "" {
+		t.Errorf("conflict body %q has no error message", raw)
+	}
+
+	status, raw = do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/unblock", "")
+	if status != http.StatusOK || decodeTask(t, raw)["status"] != "in_progress" {
+		t.Fatalf("unblock = %d %s", status, raw)
+	}
+
+	status, raw = do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/complete", "")
+	if status != http.StatusOK {
+		t.Fatalf("complete status = %d, want 200 (body: %s)", status, raw)
+	}
+	task := decodeTask(t, raw)
+	if task["status"] != "awaiting_confirmation" {
+		t.Errorf("after complete status = %v, want awaiting_confirmation", task["status"])
+	}
+
+	status, raw = do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/complete", "")
+	if status != http.StatusConflict {
+		t.Errorf("complete on completed task status = %d, want 409 (body: %s)", status, raw)
+	}
+
+	// Transitions on a 待处理 (unclaimed) task conflict.
+	id2 := createTask(t, ts, "B")
+	status, _ = do(t, http.MethodPost, ts.URL+"/api/tasks/"+id2+"/block", "")
+	if status != http.StatusConflict {
+		t.Errorf("block on todo task status = %d, want 409", status)
+	}
+	status, _ = do(t, http.MethodPost, ts.URL+"/api/tasks/"+id2+"/complete", "")
+	if status != http.StatusConflict {
+		t.Errorf("complete on todo task status = %d, want 409", status)
+	}
+
+	// Unknown id.
+	status, raw = do(t, http.MethodPost, ts.URL+"/api/tasks/no-such/block", "")
+	if status != http.StatusNotFound {
+		t.Errorf("block on missing task status = %d, want 404 (body: %s)", status, raw)
+	}
+
+	// The board list reflects each move (card sits in the right column).
+	_, raw = do(t, http.MethodGet, ts.URL+"/api/tasks", "")
+	var tasks []map[string]any
+	if err := json.Unmarshal(raw, &tasks); err != nil {
+		t.Fatal(err)
+	}
+	byTitle := map[string]string{}
+	for _, task := range tasks {
+		byTitle[task["title"].(string)] = task["status"].(string)
+	}
+	if byTitle["A"] != "awaiting_confirmation" {
+		t.Errorf("task A status in list = %q, want awaiting_confirmation", byTitle["A"])
+	}
+	if byTitle["B"] != "todo" {
+		t.Errorf("task B status in list = %q, want todo", byTitle["B"])
+	}
+}

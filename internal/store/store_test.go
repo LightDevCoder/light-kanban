@@ -277,3 +277,69 @@ func TestClaimSelfRegistersUnknownAgent(t *testing.T) {
 		t.Errorf("avatar = %v, want preserved %q", a3.Avatar, pre)
 	}
 }
+
+// Issue 04: block (处理中 → 遇到阻碍), unblock (遇到阻碍 → 处理中) and
+// complete (处理中 → 等你确认), each rejecting calls from the wrong status.
+func TestBlockUnblockComplete(t *testing.T) {
+	s := mustOpen(t, filepath.Join(t.TempDir(), "test.db"))
+	task, err := s.CreateTask(store.Task{ID: "t1", Title: "T", WorkspacePath: "w"})
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	if _, err := s.Claim(task.ID, store.Agent{ID: "a1", Name: "Alpha"}); err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+
+	blocked, err := s.Block(task.ID)
+	if err != nil {
+		t.Fatalf("Block: %v", err)
+	}
+	if blocked.Status != store.StatusBlocked {
+		t.Errorf("after Block status = %q, want %q", blocked.Status, store.StatusBlocked)
+	}
+
+	// Wrong-status calls conflict: blocking an already-blocked task, and
+	// completing a blocked task.
+	if _, err := s.Block(task.ID); !errors.Is(err, store.ErrConflict) {
+		t.Errorf("Block on blocked task = %v, want ErrConflict", err)
+	}
+	if _, err := s.Complete(task.ID); !errors.Is(err, store.ErrConflict) {
+		t.Errorf("Complete on blocked task = %v, want ErrConflict", err)
+	}
+
+	unblocked, err := s.Unblock(task.ID)
+	if err != nil {
+		t.Fatalf("Unblock: %v", err)
+	}
+	if unblocked.Status != store.StatusInProgress {
+		t.Errorf("after Unblock status = %q, want %q", unblocked.Status, store.StatusInProgress)
+	}
+
+	completed, err := s.Complete(task.ID)
+	if err != nil {
+		t.Fatalf("Complete: %v", err)
+	}
+	if completed.Status != store.StatusAwaitingConfirmation {
+		t.Errorf("after Complete status = %q, want %q", completed.Status, store.StatusAwaitingConfirmation)
+	}
+
+	// Wrong-status calls on the completed task.
+	if _, err := s.Complete(task.ID); !errors.Is(err, store.ErrConflict) {
+		t.Errorf("Complete on completed task = %v, want ErrConflict", err)
+	}
+	if _, err := s.Unblock(task.ID); !errors.Is(err, store.ErrConflict) {
+		t.Errorf("Unblock on completed task = %v, want ErrConflict", err)
+	}
+
+	// Transitions on an unclaimed 待处理 task conflict too.
+	task2, err := s.CreateTask(store.Task{ID: "t2", Title: "T2", WorkspacePath: "w"})
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	if _, err := s.Block(task2.ID); !errors.Is(err, store.ErrConflict) {
+		t.Errorf("Block on todo task = %v, want ErrConflict", err)
+	}
+	if _, err := s.Complete(task2.ID); !errors.Is(err, store.ErrConflict) {
+		t.Errorf("Complete on todo task = %v, want ErrConflict", err)
+	}
+}
