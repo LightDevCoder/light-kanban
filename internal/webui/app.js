@@ -3,6 +3,9 @@
 
 const REFRESH_MS = 5000;
 
+// A 处理中 task untouched for longer than this is flagged "suspected stuck".
+const STUCK_THRESHOLD_MS = 24 * 60 * 60 * 1000;
+
 const COLUMNS = [
   { status: 'todo', title: '待处理', color: 'gray' },
   { status: 'in_progress', title: '处理中', color: 'yellow' },
@@ -76,14 +79,23 @@ function agentChip(task) {
   return `<span class="agent-chip" title="${esc(agent.id)}">${avatar}<span class="agent-name">${esc(agent.name || agent.id)}</span></span>`;
 }
 
+function isSuspectedStuck(task) {
+  if (task.status !== 'in_progress') return false;
+  const updated = Date.parse(task.updatedAt);
+  if (Number.isNaN(updated)) return false;
+  return Date.now() - updated > STUCK_THRESHOLD_MS;
+}
+
 function cardHtml(task) {
   const tags = (task.tags || []).map((t) => `<span class="tag">${esc(t)}</span>`).join('');
   const meta = [];
   if (task.type) meta.push(`<span class="chip chip-type">${esc(task.type)}</span>`);
   if (task.dueAt) meta.push(`<span class="chip chip-due">截止 ${esc(fmtTime(task.dueAt))}</span>`);
+  const stuck = isSuspectedStuck(task);
+  const stuckBadge = stuck ? '<span class="stuck-badge" title="超过 ' + Math.round(STUCK_THRESHOLD_MS / 3600000) + ' 小时未更新">疑似卡住</span>' : '';
   return `
-    <article class="card" data-id="${esc(task.id)}">
-      <h3 class="card-title">${esc(task.title)} ${agentChip(task)}</h3>
+    <article class="card ${stuck ? 'card-stuck' : ''}" data-id="${esc(task.id)}">
+      <h3 class="card-title">${esc(task.title)} ${stuckBadge} ${agentChip(task)}</h3>
       <div class="card-path" title="workspace 文件夹">${esc(task.workspacePath)}</div>
       ${task.description ? `<p class="card-desc">${esc(task.description)}</p>` : ''}
       <div class="card-meta">${meta.join('')}${tags}</div>
@@ -98,7 +110,7 @@ function actionsFor(task) {
     case 'todo':
       return btn('claim', '接取') + btn('edit', '编辑');
     case 'in_progress':
-      return btn('block', '阻碍') + btn('complete', '完成') + btn('edit', '编辑');
+      return btn('block', '阻碍') + btn('complete', '完成') + btn('recycle', '回收') + btn('edit', '编辑');
     case 'blocked':
       return btn('unblock', '解除阻碍') + btn('edit', '编辑');
     case 'awaiting_confirmation':
@@ -228,7 +240,7 @@ async function performAction(action, id) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-  } else if (['block', 'unblock', 'complete', 'archive', 'reject'].includes(action)) {
+  } else if (['block', 'unblock', 'complete', 'archive', 'reject', 'recycle'].includes(action)) {
     await api(`/api/tasks/${idEnc}/${action}`, { method: 'POST' });
   } else if (action === 'edit') {
     const task = tasks.find((t) => t.id === id);

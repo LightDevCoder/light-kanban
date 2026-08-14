@@ -6,6 +6,6 @@
 
 **Status:** ready-for-agent
 
-- [ ] A 处理中 task not updated within the threshold is flagged "suspected stuck" in the UI.
-- [ ] The human's recycle action moves it 处理中 → 待处理.
-- [ ] The recycled task is claimable again (a subsequent claim succeeds).
+- [x] A 处理中 task not updated within the threshold is flagged "suspected stuck" in the UI.
+- [x] The human's recycle action moves it 处理中 → 待处理.
+- [x] The recycled task is claimable again (a subsequent claim succeeds).

@@ -31,6 +31,7 @@ func New(s *store.Store, ui fs.FS) http.Handler {
 		r.Post("/{id}/complete", transitionHandler(s, s.Complete, "complete"))
 		r.Post("/{id}/archive", transitionHandler(s, s.Archive, "archive"))
 		r.Post("/{id}/reject", transitionHandler(s, s.Reject, "reject"))
+		r.Post("/{id}/recycle", transitionHandler(s, s.Recycle, "recycle"))
 	})
 	r.Get("/api/agents", handleListAgents(s))
 	r.Post("/api/agents", handleUpsertAgent(s))

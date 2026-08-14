@@ -663,3 +663,47 @@ func TestPreconfigureAgent(t *testing.T) {
 		t.Errorf("default name = %v, want the id", a["name"])
 	}
 }
+
+// Issue 07: the human recycles a 处理中 task back to 待处理 in one action;
+// the recycled task is claimable again.
+func TestRecycleOrphan(t *testing.T) {
+	ts := newServer(t)
+	id := createTask(t, ts, "Orphan")
+
+	do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim", `{"agentId":"a1"}`)
+
+	status, raw := do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/recycle", "")
+	if status != http.StatusOK {
+		t.Fatalf("recycle status = %d, want 200 (body: %s)", status, raw)
+	}
+	task := decodeTask(t, raw)
+	if task["status"] != "todo" {
+		t.Errorf("status = %v, want todo", task["status"])
+	}
+	if task["claimedBy"] != nil {
+		t.Errorf("claimedBy = %v, want null after recycle", task["claimedBy"])
+	}
+
+	// Any agent can claim it again.
+	status, raw = do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim", `{"agentId":"a2","name":"Beta"}`)
+	if status != http.StatusOK {
+		t.Fatalf("re-claim status = %d, want 200 (body: %s)", status, raw)
+	}
+	if decodeTask(t, raw)["claimedBy"] != "a2" {
+		t.Errorf("re-claim body = %s", raw)
+	}
+
+	// Recycle applies to 处理中; a 待处理 task conflicts.
+	status, raw = do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/recycle", "")
+	if status != http.StatusOK {
+		t.Errorf("recycle on in_progress status = %d, want 200 (body: %s)", status, raw)
+	}
+	status, raw = do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/recycle", "")
+	if status != http.StatusConflict {
+		t.Errorf("recycle on todo status = %d, want 409 (body: %s)", status, raw)
+	}
+	status, _ = do(t, http.MethodPost, ts.URL+"/api/tasks/no-such/recycle", "")
+	if status != http.StatusNotFound {
+		t.Errorf("recycle on missing task status = %d, want 404", status)
+	}
+}

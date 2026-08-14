@@ -561,3 +561,77 @@ func TestUpsertAgentPreconfigures(t *testing.T) {
 		t.Errorf("agents = %d, want 2", len(agents))
 	}
 }
+
+// Issue 07: recycle moves a stuck 处理中 task back to 待处理, drops the
+// claim, and makes it claimable again; wrong-status recycles conflict.
+func TestRecycleReturnsToTodo(t *testing.T) {
+	s := mustOpen(t, filepath.Join(t.TempDir(), "test.db"))
+
+	task, err := s.CreateTask(store.Task{ID: "t1", Title: "T", WorkspacePath: "w"})
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	if _, err := s.Claim(task.ID, store.Agent{ID: "a1", Name: "Alpha"}); err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+
+	recycled, err := s.Recycle(task.ID)
+	if err != nil {
+		t.Fatalf("Recycle: %v", err)
+	}
+	if recycled.Status != store.StatusTodo {
+		t.Errorf("status = %q, want %q", recycled.Status, store.StatusTodo)
+	}
+	if recycled.ClaimedBy != nil {
+		t.Errorf("claimedBy = %v, want nil after recycle", recycled.ClaimedBy)
+	}
+
+	// The recycled task is claimable again, by any agent.
+	reclaimed, err := s.Claim(task.ID, store.Agent{ID: "a2", Name: "Beta"})
+	if err != nil {
+		t.Fatalf("re-claim after recycle: %v", err)
+	}
+	if reclaimed.ClaimedBy == nil || *reclaimed.ClaimedBy != "a2" {
+		t.Errorf("claimedBy = %v, want a2", reclaimed.ClaimedBy)
+	}
+
+	// Recycle applies to 处理中, so a 待处理 task conflicts.
+	if _, err := s.Recycle(task.ID); err != nil {
+		t.Fatalf("Recycle on in-progress task should succeed: %v", err)
+	}
+	if _, err := s.Recycle(task.ID); !errors.Is(err, store.ErrConflict) {
+		t.Errorf("Recycle on todo task = %v, want ErrConflict", err)
+	}
+	for _, setup := range []struct {
+		id     string
+		status string
+		move   func(id string) error
+	}{
+		{id: "t2", status: store.StatusBlocked, move: func(id string) error { _, err := s.Block(id); return err }},
+		{id: "t3", status: store.StatusAwaitingConfirmation, move: func(id string) error { _, err := s.Complete(id); return err }},
+		{id: "t4", status: store.StatusArchived, move: func(id string) error {
+			if _, err := s.Complete(id); err != nil {
+				return err
+			}
+			_, err := s.Archive(id)
+			return err
+		}},
+	} {
+		if _, err := s.CreateTask(store.Task{ID: setup.id, Title: setup.id, WorkspacePath: "w"}); err != nil {
+			t.Fatalf("CreateTask: %v", err)
+		}
+		if _, err := s.Claim(setup.id, store.Agent{ID: "a1"}); err != nil {
+			t.Fatalf("Claim: %v", err)
+		}
+		if err := setup.move(setup.id); err != nil {
+			t.Fatalf("setup move: %v", err)
+		}
+		if _, err := s.Recycle(setup.id); !errors.Is(err, store.ErrConflict) {
+			t.Errorf("Recycle on %s task = %v, want ErrConflict", setup.status, err)
+		}
+	}
+
+	if _, err := s.Recycle("missing"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("Recycle on missing task = %v, want ErrNotFound", err)
+	}
+}
