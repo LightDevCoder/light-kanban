@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"light-kanban/internal/store"
@@ -85,4 +86,88 @@ func TestPickDir(t *testing.T) {
 	if status != http.StatusInternalServerError {
 		t.Errorf("pick error status = %d, want 500 (body: %s)", status, raw)
 	}
+}
+
+// POST /api/fs/open reveals a folder in the OS file manager on the server
+// machine. The opener is injectable; validation happens before it runs.
+func TestOpenFolder(t *testing.T) {
+	old := openFolder
+	t.Cleanup(func() { openFolder = old })
+
+	dir := t.TempDir()
+	opened := ""
+	openFolder = func(path string) error { opened = path; return nil }
+
+	ts := pickTestServer(t)
+	bodyFor := func(p string) string {
+		t.Helper()
+		b, err := json.Marshal(map[string]string{"path": p})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/api/fs/open", strings.NewReader(bodyFor(dir)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("open status = %d, want 200", resp.StatusCode)
+	}
+	if filepath.Clean(opened) != filepath.Clean(dir) {
+		t.Errorf("opened = %q, want %q", opened, dir)
+	}
+
+	// Relative path rejected before the opener runs.
+	opened = ""
+	status, raw := doJSON(t, ts.URL+"/api/fs/open", bodyFor("relative/dir"))
+	if status != http.StatusBadRequest {
+		t.Errorf("relative status = %d, want 400 (body: %s)", status, raw)
+	}
+	if opened != "" {
+		t.Errorf("opener ran for a relative path: %q", opened)
+	}
+
+	// Nonexistent path is 404.
+	status, _ = doJSON(t, ts.URL+"/api/fs/open", bodyFor(filepath.Join(dir, "nope")))
+	if status != http.StatusNotFound {
+		t.Errorf("missing path status = %d, want 404", status)
+	}
+
+	// Opener failure → 500.
+	openFolder = func(path string) error { return errors.New("no file manager") }
+	status, _ = doJSON(t, ts.URL+"/api/fs/open", bodyFor(dir))
+	if status != http.StatusInternalServerError {
+		t.Errorf("opener error status = %d, want 500", status)
+	}
+}
+
+func doJSON(t *testing.T, url, body string) (int, []byte) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	buf := make([]byte, 0, 256)
+	tmp := make([]byte, 256)
+	for {
+		n, err := resp.Body.Read(tmp)
+		buf = append(buf, tmp[:n]...)
+		if err != nil {
+			break
+		}
+	}
+	return resp.StatusCode, buf
 }

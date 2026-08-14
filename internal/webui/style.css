@@ -324,9 +324,19 @@ body {
   background: #f3f4f6;
   border-radius: 999px;
   padding: 2px 8px 2px 2px;
-  margin-left: auto;
   white-space: nowrap;
 }
+.icon-btn {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 15px;
+  padding: 2px 4px;
+  border-radius: 6px;
+  line-height: 1;
+}
+.icon-btn:hover { background: #f3f4f6; }
 .avatar {
   width: 20px;
   height: 20px;

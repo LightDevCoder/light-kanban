@@ -112,7 +112,10 @@ function cardHtml(task) {
   const stuckBadge = stuck ? '<span class="stuck-badge" title="超过 ' + Math.round(STUCK_THRESHOLD_MS / 3600000) + ' 小时未更新">疑似卡住</span>' : '';
   return `
     <article class="card ${stuck ? 'card-stuck' : ''}" data-id="${esc(task.id)}">
-      <h3 class="card-title">${esc(task.title)} ${stuckBadge} ${agentChip(task)}</h3>
+      <h3 class="card-title">${esc(task.title)} ${stuckBadge}
+        <button class="icon-btn" data-action="open-folder" data-id="${esc(task.id)}" title="打开项目文件夹">📁</button>
+        ${agentChip(task)}
+      </h3>
       <div class="card-path" title="workspace 文件夹">${esc(task.workspacePath)}</div>
       ${task.description ? `<p class="card-desc">${esc(task.description)}</p>` : ''}
       <div class="card-meta">${meta.join('')}${tagsHtml(task.tags)}</div>
@@ -122,10 +125,10 @@ function cardHtml(task) {
 
 // Status → available actions, shared by every card render.
 const STATUS_ACTIONS = {
-  todo: [['claim', '接取'], ['edit', '编辑']],
-  in_progress: [['block', '阻碍'], ['complete', '完成'], ['recycle', '回收'], ['edit', '编辑']],
-  blocked: [['unblock', '解除阻碍'], ['edit', '编辑']],
-  awaiting_confirmation: [['archive', '验收通过（归档）'], ['reject', '退回修改'], ['edit', '编辑']],
+  todo: [['claim', '接取'], ['edit', '编辑'], ['delete', '删除']],
+  in_progress: [['block', '阻碍'], ['complete', '完成'], ['recycle', '回收'], ['edit', '编辑'], ['delete', '删除']],
+  blocked: [['unblock', '解除阻碍'], ['edit', '编辑'], ['delete', '删除']],
+  awaiting_confirmation: [['archive', '验收通过（归档）'], ['reject', '退回修改'], ['edit', '编辑'], ['delete', '删除']],
 };
 
 function actionsFor(task) {
@@ -294,6 +297,19 @@ async function performAction(action, id) {
     });
   } else if (['block', 'unblock', 'complete', 'archive', 'reject', 'recycle'].includes(action)) {
     await api(`/api/tasks/${idEnc}/${action}`, { method: 'POST' });
+  } else if (action === 'delete') {
+    if (!confirm('确定删除该任务？此操作不可恢复（归档历史里也会消失）。')) return;
+    await api(`/api/tasks/${idEnc}`, { method: 'DELETE' });
+  } else if (action === 'open-folder') {
+    const task = tasks.find((t) => t.id === id);
+    if (task) {
+      await api('/api/fs/open', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: task.workspacePath }),
+      });
+      return; // 打开文件夹不需要刷新看板
+    }
   } else if (action === 'edit') {
     const task = tasks.find((t) => t.id === id);
     if (task) openEditor(task);

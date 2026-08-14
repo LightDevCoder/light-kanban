@@ -32,6 +32,7 @@ func New(s *store.Store, ui fs.FS, avatarsDir string) http.Handler {
 		r.Get("/", handleListTasks(s))
 		r.Post("/", handleCreateTask(s))
 		r.Patch("/{id}", handlePatchTask(s))
+		r.Delete("/{id}", handleDeleteTask(s))
 		r.Post("/{id}/claim", handleClaim(s))
 		r.Post("/{id}/block", transitionHandler(s, s.Block, "block"))
 		r.Post("/{id}/unblock", transitionHandler(s, s.Unblock, "unblock"))
@@ -44,6 +45,7 @@ func New(s *store.Store, ui fs.FS, avatarsDir string) http.Handler {
 	r.Post("/api/agents", handleUpsertAgent(s))
 	r.Get("/api/fs/dirs", handleBrowseDirs())
 	r.Post("/api/fs/pick", handlePickDir())
+	r.Post("/api/fs/open", handleOpenDir())
 	r.Post("/api/avatars", handleUploadAvatar(avatarsDir))
 	r.Get("/api/avatars/*", handleAvatarFile(avatarsDir))
 
@@ -464,6 +466,68 @@ func handleAvatarFile(dir string) http.HandlerFunc {
 		w.Header().Set("Cache-Control", "public, max-age=3600")
 		http.ServeFile(w, r, path)
 	}
+}
+
+// handleDeleteTask removes a task entirely (human correction): 204 on
+// success, 404 for unknown ids.
+func handleDeleteTask(s *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		if err := s.DeleteTask(id); err != nil {
+			writeStoreTransitionError(w, err, "delete")
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// openFolder reveals a folder in the OS file manager on the server machine
+// (browsers cannot open local folders, so the server does it). Injectable
+// for tests.
+var openFolder = defaultOpenFolder
+
+// handleOpenDir implements the card's "jump to the project folder" button.
+func handleOpenDir() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Path string `json:"path"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid JSON body: "+err.Error())
+			return
+		}
+		path := filepath.FromSlash(strings.TrimSpace(req.Path))
+		if path == "" || !filepath.IsAbs(path) {
+			writeError(w, http.StatusBadRequest, "path must be absolute")
+			return
+		}
+		clean := filepath.Clean(path)
+		if _, err := os.Stat(clean); err != nil {
+			writeError(w, http.StatusNotFound, "path not found")
+			return
+		}
+		if err := openFolder(clean); err != nil {
+			writeError(w, http.StatusInternalServerError, "open folder: "+err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"ok": "true"})
+	}
+}
+
+// defaultOpenFolder shells out to the platform's file manager.
+func defaultOpenFolder(path string) error {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		cmd = exec.Command("explorer.exe", path)
+	case "darwin":
+		cmd = exec.Command("open", path)
+	case "linux":
+		cmd = exec.Command("xdg-open", path)
+	default:
+		return fmt.Errorf("open folder not supported on %s", runtime.GOOS)
+	}
+	return cmd.Start()
 }
 
 // pickDir opens the server's native folder picker and returns the chosen

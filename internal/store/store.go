@@ -473,6 +473,19 @@ func upsertAgent(exec execer, a Agent) error {
 	return err
 }
 
+// DeleteTask removes a task entirely (human correction tool): it leaves the
+// board and the archived history, and the row is gone from the store.
+func (s *Store) DeleteTask(id string) error {
+	res, err := s.db.Exec(`DELETE FROM tasks WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // ListAgents returns all registered agents.
 func (s *Store) ListAgents() ([]Agent, error) {
 	rows, err := s.db.Query(`SELECT id, name, avatar FROM agents ORDER BY name`)

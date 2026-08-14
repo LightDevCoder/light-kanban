@@ -838,6 +838,49 @@ func TestAvatarUploadAndServe(t *testing.T) {
 	}
 }
 
+// The human can delete a task entirely: it leaves the board, the history,
+// and the store; deleting it again is a 404.
+func TestDeleteTask(t *testing.T) {
+	ts := newServer(t)
+
+	// Delete a claimed, in-progress task.
+	id := createTask(t, ts, "Junk")
+	do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim", `{"agentId":"a1"}`)
+	status, raw := do(t, http.MethodDelete, ts.URL+"/api/tasks/"+id, "")
+	if status != http.StatusNoContent {
+		t.Fatalf("DELETE status = %d, want 204 (body: %s)", status, raw)
+	}
+
+	_, raw = do(t, http.MethodGet, ts.URL+"/api/tasks", "")
+	var tasks []map[string]any
+	if err := json.Unmarshal(raw, &tasks); err != nil {
+		t.Fatal(err)
+	}
+	for _, task := range tasks {
+		if task["id"] == id {
+			t.Error("deleted task still in the board list")
+		}
+	}
+
+	status, raw = do(t, http.MethodDelete, ts.URL+"/api/tasks/"+id, "")
+	if status != http.StatusNotFound {
+		t.Errorf("second DELETE status = %d, want 404 (body: %s)", status, raw)
+	}
+
+	// An archived task can be deleted too.
+	id2 := createTask(t, ts, "Old junk")
+	driveToAwaiting(t, ts, id2)
+	do(t, http.MethodPost, ts.URL+"/api/tasks/"+id2+"/archive", "")
+	status, _ = do(t, http.MethodDelete, ts.URL+"/api/tasks/"+id2, "")
+	if status != http.StatusNoContent {
+		t.Errorf("DELETE archived status = %d, want 204", status)
+	}
+	_, raw = do(t, http.MethodGet, ts.URL+"/api/tasks?status=archived", "")
+	if strings.TrimSpace(string(raw)) != "[]" {
+		t.Errorf("archived list after delete = %s, want []", raw)
+	}
+}
+
 // Issue 06: POST /api/agents pre-configures an agent whose identity later
 // claims display; upserting updates the display.
 func TestPreconfigureAgent(t *testing.T) {

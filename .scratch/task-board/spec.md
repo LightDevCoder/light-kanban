@@ -96,10 +96,12 @@ Status: ready-for-agent
   | `POST /api/tasks/:id/archive` | 等你确认 → 已归档 (验收通过后) |
   | `POST /api/tasks/:id/reject` | 等你确认 → 处理中 (验收不通过) |
   | `POST /api/tasks/:id/recycle` | 处理中 → 待处理, drops the claim (human; orphan reclaim, issue 07) |
+  | `DELETE /api/tasks/:id` | delete a task entirely (human correction; removes it from the board and the archived history) |
   | `GET /api/agents` | list agents |
   | `POST /api/agents` | pre-configure an agent (human) |
   | `GET /api/fs/dirs?path=<abs>` | list subdirectories of an absolute path (workspace-folder browser; `..` and relative paths rejected; empty path = platform roots) |
   | `POST /api/fs/pick` | open the server's native folder dialog on the operator's machine; returns `{"path": "<abs>"}` (`""` = canceled) |
+  | `POST /api/fs/open` | reveal a folder in the OS file manager on the server machine (the card's "jump to project folder" button); body `{path}` |
   | `POST /api/avatars` | upload an agent avatar image (multipart field `file`, ≤2 MiB, PNG/JPEG/GIF/WebP); returns `{"path": "/api/avatars/<id>.<ext>"}` |
   | `GET /api/avatars/*` | serve stored avatar images |
 

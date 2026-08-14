@@ -716,3 +716,38 @@ func TestSetStatusManualCorrection(t *testing.T) {
 		t.Errorf("SetStatus(missing) = %v, want ErrNotFound", err)
 	}
 }
+
+// The human can delete a task entirely (correction tool): it disappears from
+// the store, and deleting it again is a not-found.
+func TestDeleteTask(t *testing.T) {
+	s := mustOpen(t, filepath.Join(t.TempDir(), "test.db"))
+
+	task, err := s.CreateTask(store.Task{ID: "t1", Title: "Junk", WorkspacePath: "w"})
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	if _, err := s.Claim(task.ID, store.Agent{ID: "a1"}); err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	deletedID := task.ID
+
+	if err := s.DeleteTask(task.ID); err != nil {
+		t.Fatalf("DeleteTask: %v", err)
+	}
+	if _, err := s.GetTask(task.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("GetTask after delete = %v, want ErrNotFound", err)
+	}
+	if err := s.DeleteTask(task.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("second DeleteTask = %v, want ErrNotFound", err)
+	}
+
+	active, err := s.ListTasks("")
+	if err != nil {
+		t.Fatalf("ListTasks: %v", err)
+	}
+	for _, task := range active {
+		if task.ID == deletedID {
+			t.Error("deleted task still listed")
+		}
+	}
+}
