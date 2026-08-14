@@ -1,4 +1,5 @@
-# Produces the three cross-compiled release binaries under dist/.
+# Produces the release binaries under dist/. Windows keeps the plain name
+# (light-kanban.exe) because that is the name all docs tell users to run.
 # Usage: . .\scripts\goenv.ps1; .\scripts\cross-build.ps1
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -8,7 +9,7 @@ $targets = @(
     @{ OS = 'linux';   ARCH = 'amd64'; Out = 'light-kanban-linux-amd64' },
     @{ OS = 'darwin';  ARCH = 'amd64'; Out = 'light-kanban-darwin-amd64' },
     @{ OS = 'darwin';  ARCH = 'arm64'; Out = 'light-kanban-darwin-arm64' },
-    @{ OS = 'windows'; ARCH = 'amd64'; Out = 'light-kanban-windows-amd64.exe' }
+    @{ OS = 'windows'; ARCH = 'amd64'; Out = 'light-kanban.exe' }
 )
 foreach ($t in $targets) {
     $env:GOOS = $t.OS
@@ -18,7 +19,3 @@ foreach ($t in $targets) {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     Write-Host "built $out"
 }
-# The docs tell users to run .\dist\light-kanban.exe; keep that name in sync
-# with the current Windows build so it never goes stale.
-Copy-Item (Join-Path $dist 'light-kanban-windows-amd64.exe') (Join-Path $dist 'light-kanban.exe') -Force
-Write-Host "copied light-kanban.exe (current Windows build)"
