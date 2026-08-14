@@ -86,7 +86,6 @@ type createTaskRequest struct {
 	Title         string    `json:"title"`
 	WorkspacePath string    `json:"workspacePath"`
 	Description   *string   `json:"description"`
-	Type          *string   `json:"type"`
 	Tags          *[]string `json:"tags"`
 	DueAt         *string   `json:"dueAt"`
 }
@@ -126,7 +125,6 @@ func handleCreateTask(s *store.Store) http.HandlerFunc {
 			Title:         title,
 			WorkspacePath: workspacePath,
 			Description:   req.Description,
-			Type:          req.Type,
 			Tags:          tags,
 			DueAt:         dueAt,
 		})
@@ -250,7 +248,6 @@ type patchTaskRequest struct {
 	Title         *string   `json:"title"`
 	WorkspacePath *string   `json:"workspacePath"`
 	Description   *string   `json:"description"`
-	Type          *string   `json:"type"`
 	Tags          *[]string `json:"tags"`
 	DueAt         *string   `json:"dueAt"`
 	Status        *string   `json:"status"`
@@ -271,7 +268,6 @@ func handlePatchTask(s *store.Store) http.HandlerFunc {
 		}
 		u := store.TaskUpdate{
 			Description: req.Description,
-			Type:        req.Type,
 			Tags:        req.Tags,
 		}
 		if req.Title != nil {

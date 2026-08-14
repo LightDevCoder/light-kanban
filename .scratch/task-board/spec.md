@@ -13,7 +13,7 @@ Status: ready-for-agent
 ## User Stories
 
 1. As a human operator, I want to add a task with a title and a workspace folder path, so that I can queue work for my agents.
-2. As a human operator, I want to optionally set a description, type, and tags when creating a task, so that agents have enough context to start.
+2. As a human operator, I want to optionally set a description and tags when creating a task, so that agents have enough context to start.
 3. As a human operator, I want to see all active tasks arranged in four columns (待处理 / 处理中 / 遇到阻碍 / 等你确认), so that I understand overall state at a glance.
 4. As a human operator, I want each column title prefixed by its color (待处理=灰, 处理中=黄, 遇到阻碍=红, 等你确认=绿), so that I can scan status instantly.
 5. As a human operator, I want each card to show which agent is working on it (via their avatar), so that I know who to go talk to.
@@ -35,7 +35,7 @@ Status: ready-for-agent
 21. As an agent, I want to mark a task complete (处理中 → 等你确认), so that the human knows to review it.
 22. As an agent, I want to archive a task after the human accepts it, so that it leaves the board cleanly.
 23. As an agent, I want to read a task's workspace folder path, so that I know where the SPEC / split work orders to implement live.
-24. As an agent, I want to fill in a task's type and tags as I work, so that the board stays self-describing without the human doing all data entry.
+24. As an agent, I want to fill in a task's tags as I work, so that the board stays self-describing without the human doing all data entry.
 25. As an agent, I want a minimal, language-agnostic HTTP API, so that I can be written in any language and run from my own scheduled task.
 
 ## Implementation Decisions
@@ -62,7 +62,6 @@ Status: ready-for-agent
     description    string?      // 可选，指令正文/补充说明
     status         enum         // 待处理 | 处理中 | 遇到阻碍 | 等你确认 | 已归档
     claimedBy      string?      // 接取该任务的 agent id
-    type           string?      // 任务类型，agent（或人）自报
     tags           string[]     // 自由标签
     createdAt      timestamp
     updatedAt      timestamp
@@ -73,7 +72,7 @@ Status: ready-for-agent
   Agent {
     id       string
     name     string
-    avatar   string?   // emoji / 颜色 / 图标；缺省用名字哈希色 + 首字母
+    avatar   string?   // 图片（上传文件路径或 http(s) URL）；旧数据缺省用名字哈希色 + 首字母
   }
   ```
 
@@ -81,14 +80,14 @@ Status: ready-for-agent
 - **Concurrency model**: one task is held by at most one agent at a time; an agent may hold multiple tasks concurrently.
 - **Orphan reclaim**: no automatic lease/heartbeat/TTL in v1. The UI highlights a 处理中 task that has not been updated for a long time as "suspected stuck", and the human recycles it back to 待处理 with one click.
 - **Agent identity**: self-registration on claim, with enforced constraints — the claim request carries `agentId`, `name` and `avatar`, all required: `name` must be non-empty (the agent's tool name, e.g. "grok build"), and `avatar` must be an image that the server can verify — an uploaded `/api/avatars/...` path whose file actually exists (fabricated paths are rejected, so cards never show broken icons), or an http(s) image URL. A letter or emoji is rejected. Agents that skip or fake their identity get a 422 and must retry properly. The human can pre-configure agents or edit their identity afterwards; human-configured identities are **pinned** — later claims cannot overwrite them. No authentication in v1 (trust the local machine/network); identity is for display and ownership, not authorization.
-- **Task type / tags**: reserved fields with a convention rather than a rigid enum. Agents (or the human) fill `type` and `tags` themselves; `completedAt` is recorded by the system on archive, not hand-entered.
+- **Task tags**: free-form labels, filled by agents (or the human); `completedAt` is recorded by the system on archive, not hand-entered. (A separate `type` field existed briefly; it was removed — tags already cover it.)
 - **API contract** (REST, JSON; no auth):
 
   | Method & path | Purpose |
   | --- | --- |
   | `GET /api/tasks?status=<s>` | list tasks; default active; `status=archived` for history |
   | `POST /api/tasks` | create a task (human) |
-  | `PATCH /api/tasks/:id` | edit title/description/workspacePath/type/tags/dueAt, and manually correct `status` (human; user story 6) |
+  | `PATCH /api/tasks/:id` | edit title/description/workspacePath/tags/dueAt, and manually correct `status` (human; user story 6) |
   | `POST /api/tasks/:id/claim` | 待处理 → 处理中; body `{agentId, name, avatar}` — `agentId`、`name` 必填（agent 工具名），`avatar` 必填且必须是图片（`/api/avatars/...` 且文件真实存在，或 http(s) 图片 URL）；注册时强制约束 |
   | `POST /api/tasks/:id/block` | 处理中 → 遇到阻碍 |
   | `POST /api/tasks/:id/unblock` | 遇到阻碍 → 处理中 |
@@ -106,7 +105,8 @@ Status: ready-for-agent
   | `GET /api/avatars/*` | serve stored avatar images |
 
 - **Realtime**: polling only, no WebSocket in v1. The web UI refreshes on an interval; single-user traffic makes this cheap.
-- **Board scope**: one global board in v1. All projects' tasks share the four columns; `workspacePath` / type / tags distinguish them. A `boardId` can be added later without breaking data.
+- **Web UI**: the main page is just the four columns. 添加任务 and 归档历史 are top-bar buttons that open modals — task creation happens in a modal, and archived history is a modal list (per-item delete + select-all delete) so a long history never pushes content below the board. There is no agent registration form in the UI: agents self-register via the claim API, and their registered identity (image avatar + name, id shown as a separate pill) appears on the card once they work a task.
+- **Board scope**: one global board in v1. All projects' tasks share the four columns; `workspacePath` and tags distinguish them. A `boardId` can be added later without breaking data.
 
 ## Testing Decisions
 
@@ -129,5 +129,5 @@ Status: ready-for-agent
 ## Further Notes
 
 - The `.scratch/` issue tracker set up by `/setup-matt-pocock-skills` tracks **Light-Kanban's own development**; it is distinct from the tasks this board manages.
-- The "constraint" model: identity, type, and tags are reserved fields plus agent-facing instructions — agents self-configure when claiming, keeping the board minimal and avoiding human data entry.
+- The "constraint" model: identity and tags are reserved fields plus agent-facing instructions — agents self-configure when claiming, keeping the board minimal and avoiding human data entry.
 - Agents are expected to call the API from their own scheduled tasks; scheduling/orchestration is outside this board's responsibility.

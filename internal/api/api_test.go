@@ -159,8 +159,9 @@ func TestCreateTask(t *testing.T) {
 	if task["description"] != "build the four columns" {
 		t.Errorf("description = %v", task["description"])
 	}
-	if task["type"] != "feature" {
-		t.Errorf("type = %v", task["type"])
+	// type was removed from the product (tags only): unknown fields are ignored.
+	if task["type"] != nil {
+		t.Errorf("type = %v, want absent (removed — tags only)", task["type"])
 	}
 	tags, ok := task["tags"].([]any)
 	if !ok || len(tags) != 2 || tags[0] != "go" || tags[1] != "ui" {
@@ -633,8 +634,9 @@ func TestPatchTask(t *testing.T) {
 	if task["title"] != "New Title" {
 		t.Errorf("title = %v, want New Title", task["title"])
 	}
-	if task["type"] != "bug" {
-		t.Errorf("type = %v, want bug", task["type"])
+	// type was removed from the product (tags only): unknown fields are ignored.
+	if task["type"] != nil {
+		t.Errorf("type = %v, want absent (removed — tags only)", task["type"])
 	}
 	tags, _ := task["tags"].([]any)
 	if len(tags) != 2 || tags[0] != "x" || tags[1] != "y" {

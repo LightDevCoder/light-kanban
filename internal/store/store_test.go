@@ -28,7 +28,6 @@ func TestOpenCreatesSchemaAndTaskRoundTrip(t *testing.T) {
 	s := mustOpen(t, filepath.Join(t.TempDir(), "test.db"))
 
 	desc := "build the board"
-	typ := "feature"
 	due := time.Now().UTC().Add(48 * time.Hour).Truncate(time.Second)
 	in := store.Task{
 		ID:            "task-1",
@@ -36,7 +35,6 @@ func TestOpenCreatesSchemaAndTaskRoundTrip(t *testing.T) {
 		WorkspacePath: `C:\work\light-kanban`,
 		Description:   &desc,
 		Status:        store.StatusTodo,
-		Type:          &typ,
 		Tags:          []string{"go", "board"},
 		DueAt:         &due,
 	}
@@ -65,9 +63,6 @@ func TestOpenCreatesSchemaAndTaskRoundTrip(t *testing.T) {
 	}
 	if got.Description == nil || *got.Description != desc {
 		t.Errorf("Description = %v, want %q", got.Description, desc)
-	}
-	if got.Type == nil || *got.Type != typ {
-		t.Errorf("Type = %v, want %q", got.Type, typ)
 	}
 	if len(got.Tags) != 2 || got.Tags[0] != "go" || got.Tags[1] != "board" {
 		t.Errorf("Tags = %v, want [go board]", got.Tags)
@@ -544,11 +539,10 @@ func TestUpdateTaskFields(t *testing.T) {
 	s := mustOpen(t, filepath.Join(t.TempDir(), "test.db"))
 
 	desc := "old desc"
-	typ := "feature"
 	due := time.Now().UTC().Add(48 * time.Hour)
 	task, err := s.CreateTask(store.Task{
 		ID: "t1", Title: "Old", WorkspacePath: "w1",
-		Description: &desc, Type: &typ, Tags: []string{"a"}, DueAt: &due,
+		Description: &desc, Tags: []string{"a"}, DueAt: &due,
 	})
 	if err != nil {
 		t.Fatalf("CreateTask: %v", err)
@@ -558,13 +552,11 @@ func TestUpdateTaskFields(t *testing.T) {
 	}
 
 	newDesc := "new desc"
-	newType := "bug"
 	newDue := due.Add(24 * time.Hour)
 	updated, err := s.UpdateTask(task.ID, store.TaskUpdate{
 		Title:         strPtr2("New Title"),
 		WorkspacePath: strPtr2("w2"),
 		Description:   &newDesc,
-		Type:          &newType,
 		Tags:          &[]string{"b", "c"},
 		DueAt:         &newDue,
 	})
@@ -576,9 +568,6 @@ func TestUpdateTaskFields(t *testing.T) {
 	}
 	if updated.Description == nil || *updated.Description != newDesc {
 		t.Errorf("description = %v, want %q", updated.Description, newDesc)
-	}
-	if updated.Type == nil || *updated.Type != newType {
-		t.Errorf("type = %v, want %q", updated.Type, newType)
 	}
 	if len(updated.Tags) != 2 || updated.Tags[0] != "b" || updated.Tags[1] != "c" {
 		t.Errorf("tags = %v, want [b c]", updated.Tags)
@@ -603,15 +592,14 @@ func TestUpdateTaskFields(t *testing.T) {
 	// Empty strings clear the optional fields; ClearDueAt clears the due date.
 	cleared, err := s.UpdateTask(task.ID, store.TaskUpdate{
 		Description: strPtr2(""),
-		Type:        strPtr2(""),
 		Tags:        &[]string{},
 		ClearDueAt:  true,
 	})
 	if err != nil {
 		t.Fatalf("UpdateTask(clear): %v", err)
 	}
-	if cleared.Description != nil || cleared.Type != nil {
-		t.Errorf("cleared optional fields = %v / %v, want nil", cleared.Description, cleared.Type)
+	if cleared.Description != nil {
+		t.Errorf("cleared optional fields = %v, want nil", cleared.Description)
 	}
 	if len(cleared.Tags) != 0 {
 		t.Errorf("tags = %v, want empty", cleared.Tags)

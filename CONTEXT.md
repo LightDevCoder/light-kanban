@@ -9,7 +9,7 @@ A single unit of work shown as a card on the board.
 _Avoid_: ticket, issue, job
 
 **标签 (Tag)**:
-A named piece of metadata on a task card (free-form), alongside structured fields like task type and completion date.
+A named piece of metadata on a task card (free-form), alongside structured fields like the completion date.
 _Avoid_: label, category, badge
 
 **看板 (Board)**:

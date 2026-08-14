@@ -10,53 +10,37 @@
   <header class="topbar">
     <h1>Light-Kanban 任务看板</h1>
     <div class="topbar-right">
+      <button id="add-task-btn" class="primary-btn" type="button">＋ 添加任务</button>
       <button id="history-toggle" class="ghost-btn" type="button">归档历史</button>
       <span id="connection" class="connection ok" title="连接状态">●</span>
     </div>
   </header>
 
-  <section class="add-task">
-    <form id="add-form" autocomplete="off">
-      <div class="add-row">
-        <input name="title" placeholder="任务标题 *" required>
-        <input name="workspacePath" placeholder="workspace 文件夹路径 *（可浏览或系统选择）" required>
-        <button type="button" class="browse-btn" data-browse-target="add" title="在页面里浏览服务器文件夹">浏览…</button>
-        <button type="button" class="browse-btn" data-pick-target="add" title="调起服务器所在电脑的系统文件夹对话框">系统选择…</button>
-        <input name="type" placeholder="类型：单个，如 feature / bug / docs（可选）">
-        <input name="tags" placeholder="标签：逗号分隔多个（可选）">
-        <input name="dueAt" type="datetime-local" title="截止时间（可选，留空表示无截止）">
-        <button type="submit">添加任务</button>
-      </div>
-      <textarea name="description" rows="2" placeholder="描述 / 指令正文（可选）"></textarea>
-    </form>
-  </section>
-
-  <section class="agents-panel">
-    <details id="agents-details">
-      <summary>Agent 管理（预配置 / 以 agent 身份操作时填写）</summary>
-      <form id="identity-form" class="identity" autocomplete="off">
-        <input name="agentId" placeholder="agentId *（接取任务时用）" required>
-        <input name="name" placeholder="名称">
-        <input type="file" name="avatarFile" accept="image/png,image/jpeg,image/gif,image/webp" title="头像图片（可选）">
-        <button type="submit">保存身份</button>
-      </form>
-      <form id="agent-form" class="agent-form" autocomplete="off">
-        <input name="id" placeholder="预配置 agent id *" required>
-        <input name="name" placeholder="名称">
-        <input type="file" name="avatarFile" accept="image/png,image/jpeg,image/gif,image/webp" title="头像图片（可选）">
-        <button type="submit">预配置 / 更新</button>
-      </form>
-      <ul id="agent-list" class="agent-list"></ul>
-    </details>
-  </section>
-
   <main id="board" class="board"></main>
 
-  <section id="history" class="history hidden">
-    <h2>已归档历史</h2>
-    <div id="history-list" class="history-list"></div>
-  </section>
+  <!-- 添加任务弹窗 -->
+  <div id="add-modal" class="modal-backdrop hidden">
+    <form id="add-form" class="modal" autocomplete="off">
+      <h3>添加任务</h3>
+      <label>标题 <input name="title" required></label>
+      <label>workspace 文件夹
+        <span class="path-row">
+          <input name="workspacePath" required placeholder="任务对应的项目文件夹路径">
+          <button type="button" class="browse-btn" data-browse-target="add" title="在页面里浏览服务器文件夹">浏览…</button>
+          <button type="button" class="browse-btn" data-pick-target="add" title="调起服务器所在电脑的系统文件夹对话框">系统选择…</button>
+        </span>
+      </label>
+      <label>描述 / 指令正文 <textarea name="description" rows="3" placeholder="给 agent 的指令正文（可选）"></textarea></label>
+      <label>标签（逗号分隔多个，如 go, ui） <input name="tags"></label>
+      <label>截止时间（留空表示无截止） <input name="dueAt" type="datetime-local"></label>
+      <div class="modal-actions">
+        <button type="submit">添加</button>
+        <button type="button" id="add-cancel">取消</button>
+      </div>
+    </form>
+  </div>
 
+  <!-- 编辑任务弹窗 -->
   <div id="edit-modal" class="modal-backdrop hidden">
     <form id="edit-form" class="modal" autocomplete="off">
       <h3>编辑任务</h3>
@@ -69,7 +53,6 @@
         </span>
       </label>
       <label>描述 / 指令正文 <textarea name="description" rows="3"></textarea></label>
-      <label>类型（单个，如 feature / bug / docs） <input name="type"></label>
       <label>标签（逗号分隔多个） <input name="tags"></label>
       <label>截止时间（留空表示无截止） <input name="dueAt" type="datetime-local"></label>
       <label>状态（人工纠正用）
@@ -88,6 +71,22 @@
     </form>
   </div>
 
+  <!-- 归档历史弹窗 -->
+  <div id="archive-modal" class="modal-backdrop hidden">
+    <div class="modal archive-modal">
+      <h3>已归档历史 <span id="archive-count" class="archive-count"></span></h3>
+      <div class="archive-toolbar">
+        <label class="archive-select-all"><input type="checkbox" id="archive-select-all"> 全选</label>
+        <button type="button" id="archive-delete-selected" class="danger-btn" disabled>删除选中</button>
+      </div>
+      <div id="archive-list" class="history-list"></div>
+      <div class="modal-actions">
+        <button type="button" id="archive-close">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 文件夹浏览弹窗 -->
   <div id="browse-modal" class="modal-backdrop hidden">
     <div class="modal browse-modal">
       <h3>选择 workspace 文件夹</h3>

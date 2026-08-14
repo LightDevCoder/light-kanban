@@ -44,7 +44,6 @@ type Task struct {
 	Description   *string    `json:"description"`
 	Status        Status     `json:"status"`
 	ClaimedBy     *string    `json:"claimedBy"`
-	Type          *string    `json:"type"`
 	Tags          []string   `json:"tags"`
 	CreatedAt     time.Time  `json:"createdAt"`
 	UpdatedAt     time.Time  `json:"updatedAt"`
@@ -60,14 +59,13 @@ type Agent struct {
 }
 
 // TaskUpdate is a partial update applied to a task's human-editable fields.
-// Nil pointers mean "leave unchanged"; an empty Description or Type string
-// clears the field; ClearDueAt clears the due date. Status, ClaimedBy and
-// CompletedAt are system-written and can never be set through UpdateTask.
+// Nil pointers mean "leave unchanged"; an empty Description string clears the
+// field; ClearDueAt clears the due date. Status, ClaimedBy and CompletedAt
+// are system-written and can never be set through UpdateTask.
 type TaskUpdate struct {
 	Title         *string
 	WorkspacePath *string
 	Description   *string
-	Type          *string
 	Tags          *[]string
 	DueAt         *time.Time
 	ClearDueAt    bool
@@ -86,7 +84,6 @@ CREATE TABLE IF NOT EXISTS tasks (
 	description   TEXT,
 	status        TEXT NOT NULL DEFAULT 'todo',
 	claimed_by    TEXT,
-	type          TEXT,
 	tags          TEXT NOT NULL DEFAULT '[]',
 	created_at    TEXT NOT NULL,
 	updated_at    TEXT NOT NULL,
@@ -164,7 +161,7 @@ func (s *Store) Close() error { return s.db.Close() }
 // Ping verifies the database is reachable.
 func (s *Store) Ping(ctx context.Context) error { return s.db.PingContext(ctx) }
 
-const taskColumns = `id, title, workspace_path, description, status, claimed_by, type, tags, created_at, updated_at, completed_at, due_at`
+const taskColumns = `id, title, workspace_path, description, status, claimed_by, tags, created_at, updated_at, completed_at, due_at`
 
 type rowScanner interface {
 	Scan(dest ...any) error
@@ -173,7 +170,7 @@ type rowScanner interface {
 func scanTask(row rowScanner) (Task, error) {
 	var (
 		t           Task
-		desc, typ   sql.NullString
+		desc        sql.NullString
 		claimedBy   sql.NullString
 		status      string
 		tags        string
@@ -183,12 +180,11 @@ func scanTask(row rowScanner) (Task, error) {
 		dueAt       sql.NullString
 		err         error
 	)
-	if err = row.Scan(&t.ID, &t.Title, &t.WorkspacePath, &desc, &status, &claimedBy, &typ, &tags, &createdAt, &updatedAt, &completedAt, &dueAt); err != nil {
+	if err = row.Scan(&t.ID, &t.Title, &t.WorkspacePath, &desc, &status, &claimedBy, &tags, &createdAt, &updatedAt, &completedAt, &dueAt); err != nil {
 		return Task{}, err
 	}
 	t.Status = Status(status)
 	t.Description = nullStringPtr(desc)
-	t.Type = nullStringPtr(typ)
 	t.ClaimedBy = nullStringPtr(claimedBy)
 	if err := json.Unmarshal([]byte(tags), &t.Tags); err != nil || t.Tags == nil {
 		t.Tags = []string{}
@@ -255,9 +251,9 @@ func (s *Store) CreateTask(t Task) (Task, error) {
 	if err != nil {
 		return Task{}, fmt.Errorf("encode tags: %w", err)
 	}
-	_, err = s.db.Exec(`INSERT INTO tasks (id, title, workspace_path, description, status, claimed_by, type, tags, created_at, updated_at, completed_at, due_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		t.ID, t.Title, t.WorkspacePath, strPtr(t.Description), t.Status, strPtr(t.ClaimedBy), strPtr(t.Type),
+	_, err = s.db.Exec(`INSERT INTO tasks (id, title, workspace_path, description, status, claimed_by, tags, created_at, updated_at, completed_at, due_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		t.ID, t.Title, t.WorkspacePath, strPtr(t.Description), t.Status, strPtr(t.ClaimedBy),
 		tags, formatTime(t.CreatedAt), formatTime(t.UpdatedAt), timePtr(t.CompletedAt), timePtr(t.DueAt))
 	if err != nil {
 		return Task{}, fmt.Errorf("insert task: %w", err)
@@ -323,9 +319,6 @@ func (s *Store) UpdateTask(id string, u TaskUpdate) (Task, error) {
 	if u.Description != nil {
 		// empty string clears the field
 		apply("description", emptyToNil(*u.Description))
-	}
-	if u.Type != nil {
-		apply("type", emptyToNil(*u.Type))
 	}
 	if u.Tags != nil {
 		tags, err := encodeTags(*u.Tags)

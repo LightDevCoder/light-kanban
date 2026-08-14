@@ -39,7 +39,6 @@ async function refresh() {
     [tasks, agents] = await Promise.all([api('/api/tasks'), api('/api/agents')]);
     setConnection(true);
     render();
-    renderAgentList();
   } catch (err) {
     setConnection(false);
   }
@@ -58,7 +57,6 @@ function fmtTime(iso) {
   return d.toLocaleString();
 }
 
-// Avatar: explicit avatar wins; otherwise hash-color + first character of name.
 function hashHue(s) {
   let h = 0;
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
@@ -87,10 +85,15 @@ function avatarHtml(agent) {
   return `<span class="avatar" style="background:hsl(${hashHue(id)} 60% 45%)">${esc(initial)}</span>`;
 }
 
+// 卡片上的 agent 身份：头像 + 名称（加粗）；名称与 id 不同时把 id 显示成
+// 灰色小药丸，避免「名称 + id」连在一起被误读成一个字符串。
 function agentChip(task) {
   if (!task.claimedBy) return '';
   const agent = agentById(task.claimedBy) || { id: task.claimedBy, name: task.claimedBy };
-  return `<span class="agent-chip" title="${esc(agent.id)}">${avatarHtml(agent)}<span class="agent-name">${esc(agent.name || agent.id)}</span></span>`;
+  const id = agent.id || '';
+  const name = agent.name || id;
+  const idPill = name !== id ? `<code class="agent-id" title="agent id">${esc(id)}</code>` : '';
+  return `<span class="agent-chip" title="agent id: ${esc(id)}">${avatarHtml(agent)}<span class="agent-name">${esc(name)}</span>${idPill}</span>`;
 }
 
 function isSuspectedStuck(task) {
@@ -106,7 +109,6 @@ function tagsHtml(tags) {
 
 function cardHtml(task) {
   const meta = [];
-  if (task.type) meta.push(`<span class="chip chip-type">${esc(task.type)}</span>`);
   if (task.dueAt) meta.push(`<span class="chip chip-due">截止 ${esc(fmtTime(task.dueAt))}</span>`);
   const stuck = isSuspectedStuck(task);
   const stuckBadge = stuck ? '<span class="stuck-badge" title="超过 ' + Math.round(STUCK_THRESHOLD_MS / 3600000) + ' 小时未更新">疑似卡住</span>' : '';
@@ -134,11 +136,58 @@ const STATUS_ACTIONS = {
 function actionsFor(task) {
   const id = esc(task.id);
   return (STATUS_ACTIONS[task.status] || [])
-    // 接取是 agent 通过 API 做的动作：只有保存过 agent 身份才显示按钮
+    // 接取是 agent 通过 API 做的动作：只有本浏览器保存过 agent 身份才显示按钮
     .filter(([action]) => action !== 'claim' || Boolean(identity().agentId))
     .map(([action, label]) => `<button data-action="${action}" data-id="${id}">${label}</button>`)
     .join('');
 }
+
+// ---- 添加任务弹窗 ----
+
+const addModal = document.getElementById('add-modal');
+const addForm = document.getElementById('add-form');
+
+function openAdd() {
+  addForm.reset();
+  addModal.classList.remove('hidden');
+  addForm.elements.title.focus();
+}
+
+function closeAdd() {
+  addModal.classList.add('hidden');
+}
+
+document.getElementById('add-task-btn').addEventListener('click', openAdd);
+document.getElementById('add-cancel').addEventListener('click', closeAdd);
+addModal.addEventListener('click', (ev) => {
+  if (ev.target === addModal) closeAdd();
+});
+
+addForm.addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const fd = new FormData(addForm);
+  const payload = {
+    title: fd.get('title').trim(),
+    workspacePath: fd.get('workspacePath').trim(),
+  };
+  const description = fd.get('description').trim();
+  const tags = fd.get('tags').split(',').map((s) => s.trim()).filter(Boolean);
+  const dueAtRaw = fd.get('dueAt');
+  if (description) payload.description = description;
+  if (tags.length) payload.tags = tags;
+  if (dueAtRaw) payload.dueAt = new Date(dueAtRaw).toISOString();
+  try {
+    await api('/api/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    closeAdd();
+    await refresh();
+  } catch (err) {
+    alert('添加任务失败：' + err.message);
+  }
+});
 
 // ---- Task editor modal ----
 
@@ -158,7 +207,6 @@ function openEditor(task) {
   editForm.elements.title.value = task.title || '';
   editForm.elements.workspacePath.value = task.workspacePath || '';
   editForm.elements.description.value = task.description || '';
-  editForm.elements.type.value = task.type || '';
   editForm.elements.tags.value = (task.tags || []).join(', ');
   editForm.elements.dueAt.value = toLocalInput(task.dueAt);
   editForm.elements.status.value = task.status || 'todo';
@@ -178,7 +226,6 @@ editForm.addEventListener('submit', async (ev) => {
     title: fd.get('title').trim(),
     workspacePath: fd.get('workspacePath').trim(),
     description: fd.get('description'),
-    type: fd.get('type').trim(),
     tags: fd.get('tags').split(',').map((s) => s.trim()).filter(Boolean),
     dueAt: fd.get('dueAt') ? new Date(fd.get('dueAt')).toISOString() : '',
   };
@@ -226,6 +273,8 @@ function render() {
 }
 
 // ---- Agent identity (saved locally; agents normally claim via the API) ----
+// 注册是 agent 自己的事，网页不提供注册表单：卡片上会直接显示 agent
+// 注册时提供的信息（头像 + 名称）。本浏览器保存过身份时，「接取」按钮才会出现。
 
 let savedIdentity = loadIdentity();
 
@@ -241,58 +290,12 @@ function identity() {
   return savedIdentity;
 }
 
-async function uploadAvatarFile(file) {
-  const fd = new FormData();
-  fd.append('file', file);
-  const res = await api('/api/avatars', { method: 'POST', body: fd });
-  return res.path;
-}
-
-function wireIdentityForm() {
-  const form = document.getElementById('identity-form');
-  if (savedIdentity.agentId) {
-    form.elements.agentId.value = savedIdentity.agentId || '';
-    form.elements.name.value = savedIdentity.name || '';
-  }
-  form.addEventListener('submit', async (ev) => {
-    ev.preventDefault();
-    const agentId = form.elements.agentId.value.trim();
-    if (!agentId) {
-      alert('agentId 必填。');
-      return;
-    }
-    const name = form.elements.name.value.trim();
-    if (!name) {
-      alert('名称必填（用 agent 工具名，如 "grok build"，而不是模型名）。');
-      return;
-    }
-    const file = form.elements.avatarFile.files && form.elements.avatarFile.files[0];
-    if (!file && !savedIdentity.avatar) {
-      alert('头像必填：请选择一张图片（接取时服务端会强制校验名称与图片头像）。');
-      return;
-    }
-    try {
-      let avatar = savedIdentity.avatar || '';
-      if (file) {
-        avatar = await uploadAvatarFile(file);
-      }
-      savedIdentity = { agentId, name, avatar };
-      localStorage.setItem('lk-identity', JSON.stringify(savedIdentity));
-      form.elements.avatarFile.value = '';
-      await refresh();
-    } catch (err) {
-      alert('保存身份失败：' + err.message);
-    }
-  });
-}
-
 async function performAction(action, id) {
   const idEnc = encodeURIComponent(id);
   if (action === 'claim') {
     const me = identity();
     if (!me.agentId) {
-      alert('请先在「Agent 管理」面板里填写 agentId 并保存身份（agent 通常通过 API 接取，不需要网页）。');
-      document.getElementById('agents-details').open = true;
+      alert('本浏览器没有保存 agent 身份：agent 应通过 API 接取（POST /api/tasks/:id/claim，携带 agentId/name/avatar）。');
       return;
     }
     const payload = { agentId: me.agentId };
@@ -395,7 +398,7 @@ document.querySelectorAll('[data-browse-target]').forEach((btn) => {
     const target = btn.dataset.browseTarget;
     const input = target === 'edit'
       ? editForm.elements.workspacePath
-      : document.querySelector('#add-form input[name="workspacePath"]');
+      : addForm.elements.workspacePath;
     openBrowser(input);
   });
 });
@@ -416,103 +419,127 @@ document.querySelectorAll('[data-pick-target]').forEach((btn) => {
     const target = btn.dataset.pickTarget;
     const input = target === 'edit'
       ? editForm.elements.workspacePath
-      : document.querySelector('#add-form input[name="workspacePath"]');
+      : addForm.elements.workspacePath;
     pickSystemFolder(input);
   });
 });
 
-// ---- Agents panel ----
+// ---- 归档历史弹窗 ----
 
-const agentList = document.getElementById('agent-list');
-const agentForm = document.getElementById('agent-form');
+const archiveModal = document.getElementById('archive-modal');
+const archiveList = document.getElementById('archive-list');
+const archiveCount = document.getElementById('archive-count');
+const archiveSelectAll = document.getElementById('archive-select-all');
+const archiveDeleteSelected = document.getElementById('archive-delete-selected');
+let archivedTasks = [];
 
-function renderAgentList() {
-  agentList.replaceChildren();
-  for (const agent of agents) {
-    const li = document.createElement('li');
-    li.className = 'agent-item';
-    li.innerHTML = `${avatarHtml(agent)}<span class="agent-name">${esc(agent.name || agent.id)}</span><code class="agent-id" title="agent id">${esc(agent.id)}</code>
-      <button type="button" class="agent-edit" data-agent-id="${esc(agent.id)}" data-agent-name="${esc(agent.name || '')}" title="把该 agent 的 id/名称填进表单以便修正">编辑</button>`;
-    agentList.appendChild(li);
-  }
+async function fetchArchived() {
+  archivedTasks = await api('/api/tasks?status=archived');
 }
 
-// 修正 agent 身份：点列表里的「编辑」→ 改名称 / 上传图标 → 保存（保存后钉死，agent 接取时覆盖不了）。
-agentList.addEventListener('click', (ev) => {
-  const btn = ev.target.closest('button.agent-edit');
-  if (!btn) return;
-  agentForm.elements.id.value = btn.dataset.agentId || '';
-  agentForm.elements.name.value = btn.dataset.agentName || '';
-  agentForm.elements.avatarFile.value = '';
-  document.getElementById('agents-details').open = true;
-  agentForm.elements.name.focus();
-});
-
-agentForm.addEventListener('submit', async (ev) => {
-  ev.preventDefault();
-  const fd = new FormData(agentForm);
-  const payload = { id: fd.get('id').trim() };
-  const name = fd.get('name').trim();
-  if (name) payload.name = name;
-  const file = fd.get('avatarFile');
-  try {
-    if (file && file.size) {
-      payload.avatar = await uploadAvatarFile(file);
-    }
-    await api('/api/agents', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    agentForm.reset();
-    await refresh();
-  } catch (err) {
-    alert('保存 agent 失败：' + err.message);
-  }
-});
-
-// ---- Archived history view ----
-
-const historySection = document.getElementById('history');
-const historyList = document.getElementById('history-list');
-const historyToggle = document.getElementById('history-toggle');
-let historyVisible = false;
-
-async function renderHistory() {
-  const archived = await api('/api/tasks?status=archived');
-  historyList.replaceChildren();
-  if (archived.length === 0) {
-    historyList.innerHTML = '<p class="history-empty">还没有已归档的任务。</p>';
+function renderArchive() {
+  archiveList.replaceChildren();
+  archiveCount.textContent = `共 ${archivedTasks.length} 条`;
+  if (!archivedTasks.length) {
+    archiveList.innerHTML = '<p class="history-empty">还没有已归档的任务。</p>';
+    archiveSelectAll.checked = false;
+    archiveSelectAll.disabled = true;
+    archiveDeleteSelected.disabled = true;
     return;
   }
-  for (const task of archived) {
+  archiveSelectAll.disabled = false;
+  for (const task of archivedTasks) {
     const row = document.createElement('div');
     row.className = 'history-row';
     row.innerHTML = `
+      <input type="checkbox" class="history-check" data-id="${esc(task.id)}" title="选择此任务">
       <div class="history-main">
-        <div class="history-title">${esc(task.title)} ${task.type ? `<span class="chip chip-type">${esc(task.type)}</span>` : ''}</div>
+        <div class="history-title">${esc(task.title)}</div>
         <div class="history-path">${esc(task.workspacePath)}</div>
         <div class="history-tags">${tagsHtml(task.tags)}</div>
       </div>
-      <div class="history-when">完成于 ${esc(fmtTime(task.completedAt))}</div>`;
-    historyList.appendChild(row);
+      <div class="history-side">
+        <div class="history-when">完成于 ${esc(fmtTime(task.completedAt))}</div>
+        <button type="button" class="delete-btn" data-del-id="${esc(task.id)}" title="删除此历史记录">删除</button>
+      </div>`;
+    archiveList.appendChild(row);
   }
+  syncSelectAll();
 }
 
-async function toggleHistory() {
-  historyVisible = !historyVisible;
-  historySection.classList.toggle('hidden', !historyVisible);
-  historyToggle.textContent = historyVisible ? '收起历史' : '归档历史';
-  if (historyVisible) {
-    try {
-      await renderHistory();
-    } catch (err) {
-      alert('加载历史失败：' + err.message);
-    }
-  }
+function checkedArchiveIds() {
+  return Array.from(archiveList.querySelectorAll('input.history-check:checked')).map((c) => c.dataset.id);
 }
 
-historyToggle.addEventListener('click', toggleHistory);
+function syncSelectAll() {
+  const boxes = archiveList.querySelectorAll('input.history-check');
+  const checked = archiveList.querySelectorAll('input.history-check:checked').length;
+  archiveSelectAll.checked = boxes.length > 0 && checked === boxes.length;
+  archiveDeleteSelected.disabled = checked === 0;
+}
+
+async function openArchive() {
+  await fetchArchived();
+  renderArchive();
+  archiveModal.classList.remove('hidden');
+}
+
+function closeArchive() {
+  archiveModal.classList.add('hidden');
+}
+
+async function deleteArchived(ids) {
+  for (const id of ids) {
+    await api(`/api/tasks/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+  await Promise.all([refresh(), fetchArchived()]);
+  renderArchive();
+}
+
+archiveSelectAll.addEventListener('change', () => {
+  const on = archiveSelectAll.checked;
+  archiveList.querySelectorAll('input.history-check').forEach((c) => { c.checked = on; });
+  syncSelectAll();
+});
+
+archiveList.addEventListener('change', (ev) => {
+  if (ev.target.matches('input.history-check')) syncSelectAll();
+});
+
+archiveList.addEventListener('click', async (ev) => {
+  const del = ev.target.closest('button[data-del-id]');
+  if (!del) return;
+  if (!confirm('确定删除该条历史记录？此操作不可恢复。')) return;
+  try {
+    await deleteArchived([del.dataset.delId]);
+  } catch (err) {
+    alert('删除失败：' + err.message);
+  }
+});
+
+archiveDeleteSelected.addEventListener('click', async () => {
+  const ids = checkedArchiveIds();
+  if (!ids.length) return;
+  if (!confirm(`确定删除选中的 ${ids.length} 条历史记录？此操作不可恢复。`)) return;
+  try {
+    await deleteArchived(ids);
+  } catch (err) {
+    alert('删除失败：' + err.message);
+  }
+});
+
+document.getElementById('archive-close').addEventListener('click', closeArchive);
+archiveModal.addEventListener('click', (ev) => {
+  if (ev.target === archiveModal) closeArchive();
+});
+
+document.getElementById('history-toggle').addEventListener('click', async () => {
+  try {
+    await openArchive();
+  } catch (err) {
+    alert('加载历史失败：' + err.message);
+  }
+});
 
 boardEl.addEventListener('click', async (ev) => {
   const btn = ev.target.closest('button[data-action]');
@@ -524,38 +551,5 @@ boardEl.addEventListener('click', async (ev) => {
   }
 });
 
-function wireAddForm() {
-  const form = document.getElementById('add-form');
-  form.addEventListener('submit', async (ev) => {
-    ev.preventDefault();
-    const fd = new FormData(form);
-    const payload = {
-      title: fd.get('title').trim(),
-      workspacePath: fd.get('workspacePath').trim(),
-    };
-    const description = fd.get('description').trim();
-    const type = fd.get('type').trim();
-    const tags = fd.get('tags').split(',').map((s) => s.trim()).filter(Boolean);
-    const dueAtRaw = fd.get('dueAt');
-    if (description) payload.description = description;
-    if (type) payload.type = type;
-    if (tags.length) payload.tags = tags;
-    if (dueAtRaw) payload.dueAt = new Date(dueAtRaw).toISOString();
-    try {
-      await api('/api/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      form.reset();
-      await refresh();
-    } catch (err) {
-      alert('添加任务失败：' + err.message);
-    }
-  });
-}
-
-wireIdentityForm();
-wireAddForm();
 refresh();
 setInterval(refresh, REFRESH_MS);
