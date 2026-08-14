@@ -52,6 +52,89 @@ body {
 .ghost-btn:hover { background: #1f2937; }
 
 .hidden { display: none; }
+
+.agents-panel { padding: 0 20px 8px; }
+.agents-panel details { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; }
+.agents-panel summary {
+  cursor: pointer;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+.agent-form { display: flex; gap: 8px; padding: 0 12px 8px; flex-wrap: wrap; }
+.agent-form input {
+  padding: 6px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.agent-form button {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  background: #2563eb;
+  color: #fff;
+  cursor: pointer;
+  font-size: 13px;
+}
+.agent-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 12px 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.agent-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #f3f4f6;
+  border-radius: 999px;
+  padding: 3px 10px 3px 3px;
+  font-size: 13px;
+}
+.agent-item code { color: #6b7280; font-size: 12px; }
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+.modal {
+  background: #fff;
+  border-radius: 10px;
+  padding: 18px;
+  width: min(480px, 92vw);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.modal h3 { margin: 0 0 4px; font-size: 16px; }
+.modal label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: #374151; }
+.modal input, .modal textarea {
+  padding: 7px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+}
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.modal-actions button {
+  padding: 7px 14px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.modal-actions button[type="submit"] { background: #2563eb; color: #fff; }
+.modal-actions button[type="button"] { background: #f3f4f6; color: #1f2937; }
+
 .history { padding: 16px 20px; }
 .history h2 { margin: 0 0 10px; font-size: 16px; }
 .history-list { display: flex; flex-direction: column; gap: 8px; }

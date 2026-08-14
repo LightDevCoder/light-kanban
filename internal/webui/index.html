@@ -37,12 +37,41 @@
     </form>
   </section>
 
+  <section class="agents-panel">
+    <details id="agents-details">
+      <summary>Agent 管理</summary>
+      <form id="agent-form" class="agent-form" autocomplete="off">
+        <input name="id" placeholder="agent id *" required>
+        <input name="name" placeholder="名称">
+        <input name="avatar" placeholder="头像（emoji）">
+        <button type="submit">预配置 / 更新</button>
+      </form>
+      <ul id="agent-list" class="agent-list"></ul>
+    </details>
+  </section>
+
   <main id="board" class="board"></main>
 
   <section id="history" class="history hidden">
     <h2>已归档历史</h2>
     <div id="history-list" class="history-list"></div>
   </section>
+
+  <div id="edit-modal" class="modal-backdrop hidden">
+    <form id="edit-form" class="modal" autocomplete="off">
+      <h3>编辑任务</h3>
+      <label>标题 <input name="title" required></label>
+      <label>workspace 文件夹 <input name="workspacePath" required></label>
+      <label>描述 / 指令正文 <textarea name="description" rows="3"></textarea></label>
+      <label>类型 <input name="type"></label>
+      <label>标签（逗号分隔） <input name="tags"></label>
+      <label>截止时间 <input name="dueAt" type="datetime-local"></label>
+      <div class="modal-actions">
+        <button type="submit">保存</button>
+        <button type="button" id="edit-cancel">取消</button>
+      </div>
+    </form>
+  </div>
 
   <script src="/app.js"></script>
 </body>

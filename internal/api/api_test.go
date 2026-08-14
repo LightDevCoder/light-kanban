@@ -527,3 +527,139 @@ func TestReviewRejectsWrongStatus(t *testing.T) {
 		t.Errorf("archive on missing task status = %d, want 404", status)
 	}
 }
+
+// Issue 06: PATCH /api/tasks/:id edits the human-editable fields and
+// persists them; system fields are never touched.
+func TestPatchTask(t *testing.T) {
+	ts := newServer(t)
+	id := createTask(t, ts, "Old")
+
+	status, raw := do(t, http.MethodPatch, ts.URL+"/api/tasks/"+id,
+		`{"title":"New Title","type":"bug","tags":["x","y"],"dueAt":"2026-12-01T00:00:00Z"}`)
+	if status != http.StatusOK {
+		t.Fatalf("PATCH status = %d, want 200 (body: %s)", status, raw)
+	}
+	task := decodeTask(t, raw)
+	if task["title"] != "New Title" {
+		t.Errorf("title = %v, want New Title", task["title"])
+	}
+	if task["type"] != "bug" {
+		t.Errorf("type = %v, want bug", task["type"])
+	}
+	tags, _ := task["tags"].([]any)
+	if len(tags) != 2 || tags[0] != "x" || tags[1] != "y" {
+		t.Errorf("tags = %v", task["tags"])
+	}
+	if task["dueAt"] != "2026-12-01T00:00:00Z" {
+		t.Errorf("dueAt = %v", task["dueAt"])
+	}
+	if task["status"] != "todo" {
+		t.Errorf("status = %v, want todo (system field)", task["status"])
+	}
+	if task["claimedBy"] != nil {
+		t.Errorf("claimedBy = %v, want null (system field)", task["claimedBy"])
+	}
+
+	// Empty string clears an optional field; null leaves it unchanged.
+	status, raw = do(t, http.MethodPatch, ts.URL+"/api/tasks/"+id, `{"description":""}`)
+	if status != http.StatusOK {
+		t.Fatalf("PATCH clear description status = %d (body: %s)", status, raw)
+	}
+	task = decodeTask(t, raw)
+	if task["description"] != nil {
+		t.Errorf("description = %v, want null after clearing", task["description"])
+	}
+	status, raw = do(t, http.MethodPatch, ts.URL+"/api/tasks/"+id, `{"description":null}`)
+	if status != http.StatusOK {
+		t.Fatalf("PATCH null description status = %d (body: %s)", status, raw)
+	}
+	task = decodeTask(t, raw)
+	if task["description"] != nil {
+		t.Errorf("description = %v, want null (null means unchanged)", task["description"])
+	}
+	status, raw = do(t, http.MethodPatch, ts.URL+"/api/tasks/"+id, `{"dueAt":""}`)
+	if status != http.StatusOK {
+		t.Fatalf("PATCH clear dueAt status = %d (body: %s)", status, raw)
+	}
+	task = decodeTask(t, raw)
+	if task["dueAt"] != nil {
+		t.Errorf("dueAt = %v, want null after clearing", task["dueAt"])
+	}
+
+	// Validation: blank title/workspacePath, malformed dueAt, bad JSON.
+	status, raw = do(t, http.MethodPatch, ts.URL+"/api/tasks/"+id, `{"title":"  "}`)
+	if status != http.StatusUnprocessableEntity {
+		t.Errorf("blank title status = %d, want 422 (body: %s)", status, raw)
+	}
+	status, _ = do(t, http.MethodPatch, ts.URL+"/api/tasks/"+id, `{"workspacePath":""}`)
+	if status != http.StatusUnprocessableEntity {
+		t.Errorf("blank workspacePath status = %d, want 422", status)
+	}
+	status, _ = do(t, http.MethodPatch, ts.URL+"/api/tasks/"+id, `{"dueAt":"nope"}`)
+	if status != http.StatusUnprocessableEntity {
+		t.Errorf("bad dueAt status = %d, want 422", status)
+	}
+	status, _ = do(t, http.MethodPatch, ts.URL+"/api/tasks/"+id, `{broken`)
+	if status != http.StatusBadRequest {
+		t.Errorf("malformed JSON status = %d, want 400", status)
+	}
+	status, _ = do(t, http.MethodPatch, ts.URL+"/api/tasks/no-such", `{"title":"X"}`)
+	if status != http.StatusNotFound {
+		t.Errorf("PATCH missing task status = %d, want 404", status)
+	}
+}
+
+// Issue 06: POST /api/agents pre-configures an agent whose identity later
+// claims display; upserting updates the display.
+func TestPreconfigureAgent(t *testing.T) {
+	ts := newServer(t)
+
+	status, raw := do(t, http.MethodPost, ts.URL+"/api/agents",
+		`{"id":"pre","name":"Pre Agent","avatar":"🦄"}`)
+	if status != http.StatusOK {
+		t.Fatalf("POST /api/agents status = %d, want 200 (body: %s)", status, raw)
+	}
+
+	status, raw = do(t, http.MethodGet, ts.URL+"/api/agents", "")
+	if status != http.StatusOK {
+		t.Fatalf("GET /api/agents status = %d", status)
+	}
+	var agents []map[string]any
+	if err := json.Unmarshal(raw, &agents); err != nil {
+		t.Fatal(err)
+	}
+	if len(agents) != 1 || agents[0]["id"] != "pre" || agents[0]["name"] != "Pre Agent" || agents[0]["avatar"] != "🦄" {
+		t.Errorf("agents = %s", raw)
+	}
+
+	// Upsert updates the display identity (avatar change).
+	status, raw = do(t, http.MethodPost, ts.URL+"/api/agents",
+		`{"id":"pre","name":"Pre Agent","avatar":"🐉"}`)
+	if status != http.StatusOK {
+		t.Fatalf("re-POST status = %d (body: %s)", status, raw)
+	}
+	_, raw = do(t, http.MethodGet, ts.URL+"/api/agents", "")
+	if err := json.Unmarshal(raw, &agents); err != nil {
+		t.Fatal(err)
+	}
+	if len(agents) != 1 || agents[0]["avatar"] != "🐉" {
+		t.Errorf("agents after upsert = %s", raw)
+	}
+
+	// Validation: id required; name defaults to id.
+	status, raw = do(t, http.MethodPost, ts.URL+"/api/agents", `{"name":"NoId"}`)
+	if status != http.StatusUnprocessableEntity {
+		t.Errorf("agent without id status = %d, want 422 (body: %s)", status, raw)
+	}
+	status, raw = do(t, http.MethodPost, ts.URL+"/api/agents", `{"id":"justid"}`)
+	if status != http.StatusOK {
+		t.Fatalf("agent without name status = %d, want 200 (body: %s)", status, raw)
+	}
+	var a map[string]any
+	if err := json.Unmarshal(raw, &a); err != nil {
+		t.Fatal(err)
+	}
+	if a["name"] != "justid" {
+		t.Errorf("default name = %v, want the id", a["name"])
+	}
+}

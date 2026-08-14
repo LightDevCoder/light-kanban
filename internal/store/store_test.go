@@ -425,3 +425,139 @@ func TestArchiveRejectHistory(t *testing.T) {
 		t.Errorf("Archive on missing task = %v, want ErrNotFound", err)
 	}
 }
+
+// Issue 06: UpdateTask edits the human-editable fields only, persists them,
+// and bumps UpdatedAt; system fields (status, claimedBy, completedAt) are
+// never touched; empty strings clear optional fields.
+func TestUpdateTaskFields(t *testing.T) {
+	s := mustOpen(t, filepath.Join(t.TempDir(), "test.db"))
+
+	desc := "old desc"
+	typ := "feature"
+	due := time.Now().UTC().Add(48 * time.Hour)
+	task, err := s.CreateTask(store.Task{
+		ID: "t1", Title: "Old", WorkspacePath: "w1",
+		Description: &desc, Type: &typ, Tags: []string{"a"}, DueAt: &due,
+	})
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	if _, err := s.Claim(task.ID, store.Agent{ID: "a1", Name: "Alpha"}); err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+
+	newDesc := "new desc"
+	newType := "bug"
+	newDue := due.Add(24 * time.Hour)
+	updated, err := s.UpdateTask(task.ID, store.TaskUpdate{
+		Title:         strPtr2("New Title"),
+		WorkspacePath: strPtr2("w2"),
+		Description:   &newDesc,
+		Type:          &newType,
+		Tags:          &[]string{"b", "c"},
+		DueAt:         &newDue,
+	})
+	if err != nil {
+		t.Fatalf("UpdateTask: %v", err)
+	}
+	if updated.Title != "New Title" || updated.WorkspacePath != "w2" {
+		t.Errorf("title/workspacePath = %q / %q", updated.Title, updated.WorkspacePath)
+	}
+	if updated.Description == nil || *updated.Description != newDesc {
+		t.Errorf("description = %v, want %q", updated.Description, newDesc)
+	}
+	if updated.Type == nil || *updated.Type != newType {
+		t.Errorf("type = %v, want %q", updated.Type, newType)
+	}
+	if len(updated.Tags) != 2 || updated.Tags[0] != "b" || updated.Tags[1] != "c" {
+		t.Errorf("tags = %v, want [b c]", updated.Tags)
+	}
+	if updated.DueAt == nil || updated.DueAt.Sub(newDue) > time.Second {
+		t.Errorf("dueAt = %v, want ~%v", updated.DueAt, newDue)
+	}
+	if !updated.UpdatedAt.After(task.UpdatedAt) {
+		t.Errorf("UpdatedAt not bumped: %v → %v", task.UpdatedAt, updated.UpdatedAt)
+	}
+	// System fields untouched.
+	if updated.Status != store.StatusInProgress {
+		t.Errorf("status = %q, want in_progress (system field must survive)", updated.Status)
+	}
+	if updated.ClaimedBy == nil || *updated.ClaimedBy != "a1" {
+		t.Errorf("claimedBy = %v, want a1 (system field must survive)", updated.ClaimedBy)
+	}
+	if updated.CompletedAt != nil {
+		t.Errorf("completedAt = %v, want nil", updated.CompletedAt)
+	}
+
+	// Empty strings clear the optional fields; ClearDueAt clears the due date.
+	cleared, err := s.UpdateTask(task.ID, store.TaskUpdate{
+		Description: strPtr2(""),
+		Type:        strPtr2(""),
+		Tags:        &[]string{},
+		ClearDueAt:  true,
+	})
+	if err != nil {
+		t.Fatalf("UpdateTask(clear): %v", err)
+	}
+	if cleared.Description != nil || cleared.Type != nil {
+		t.Errorf("cleared optional fields = %v / %v, want nil", cleared.Description, cleared.Type)
+	}
+	if len(cleared.Tags) != 0 {
+		t.Errorf("tags = %v, want empty", cleared.Tags)
+	}
+	if cleared.DueAt != nil {
+		t.Errorf("dueAt = %v, want nil after clear", cleared.DueAt)
+	}
+
+	// An empty update is a no-op read; unknown ids are not found.
+	noop, err := s.UpdateTask(task.ID, store.TaskUpdate{})
+	if err != nil || noop.ID != task.ID {
+		t.Errorf("empty update = %+v, %v", noop, err)
+	}
+	if _, err := s.UpdateTask("missing", store.TaskUpdate{Title: strPtr2("X")}); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("UpdateTask(missing) = %v, want ErrNotFound", err)
+	}
+}
+
+func strPtr2(s string) *string { return &s }
+
+// Issue 06: agents can be pre-configured with id/name/avatar and updated;
+// a missing name defaults to the id.
+func TestUpsertAgentPreconfigures(t *testing.T) {
+	s := mustOpen(t, filepath.Join(t.TempDir(), "test.db"))
+
+	avatar := "🦄"
+	a, err := s.UpsertAgent(store.Agent{ID: "pre", Name: "Pre Agent", Avatar: &avatar})
+	if err != nil {
+		t.Fatalf("UpsertAgent: %v", err)
+	}
+	if a.ID != "pre" || a.Name != "Pre Agent" || a.Avatar == nil || *a.Avatar != avatar {
+		t.Errorf("agent = %+v", a)
+	}
+
+	// Upserting again updates the display identity.
+	a, err = s.UpsertAgent(store.Agent{ID: "pre", Name: "Pre Agent v2"})
+	if err != nil {
+		t.Fatalf("UpsertAgent: %v", err)
+	}
+	if a.Name != "Pre Agent v2" {
+		t.Errorf("name = %q, want Pre Agent v2", a.Name)
+	}
+
+	// Name defaults to the id.
+	a, err = s.UpsertAgent(store.Agent{ID: "nameless"})
+	if err != nil {
+		t.Fatalf("UpsertAgent: %v", err)
+	}
+	if a.Name != "nameless" {
+		t.Errorf("name = %q, want id as default", a.Name)
+	}
+
+	agents, err := s.ListAgents()
+	if err != nil {
+		t.Fatalf("ListAgents: %v", err)
+	}
+	if len(agents) != 2 {
+		t.Errorf("agents = %d, want 2", len(agents))
+	}
+}

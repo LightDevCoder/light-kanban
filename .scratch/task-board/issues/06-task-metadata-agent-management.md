@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-- [ ] `PATCH /api/tasks/:id` updates title / description / workspacePath / type / tags / dueAt and persists them.
-- [ ] `GET /api/agents` lists registered agents.
-- [ ] `POST /api/agents` pre-configures an agent with id + name + avatar, which later claims display.
-- [ ] The web UI lets the human edit a task's fields and manage agents.
+- [x] `PATCH /api/tasks/:id` updates title / description / workspacePath / type / tags / dueAt and persists them.
+- [x] `GET /api/agents` lists registered agents.
+- [x] `POST /api/agents` pre-configures an agent with id + name + avatar, which later claims display.
+- [x] The web UI lets the human edit a task's fields and manage agents.

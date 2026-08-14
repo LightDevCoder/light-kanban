@@ -36,6 +36,7 @@ async function refresh() {
     [tasks, agents] = await Promise.all([api('/api/tasks'), api('/api/agents')]);
     setConnection(true);
     render();
+    renderAgentList();
   } catch (err) {
     setConnection(false);
   }
@@ -95,17 +96,76 @@ function actionsFor(task) {
   const btn = (action, label) => `<button data-action="${action}" data-id="${id}">${label}</button>`;
   switch (task.status) {
     case 'todo':
-      return btn('claim', '接取');
+      return btn('claim', '接取') + btn('edit', '编辑');
     case 'in_progress':
-      return btn('block', '阻碍') + btn('complete', '完成');
+      return btn('block', '阻碍') + btn('complete', '完成') + btn('edit', '编辑');
     case 'blocked':
-      return btn('unblock', '解除阻碍');
+      return btn('unblock', '解除阻碍') + btn('edit', '编辑');
     case 'awaiting_confirmation':
-      return btn('archive', '验收通过（归档）') + btn('reject', '退回修改');
+      return btn('archive', '验收通过（归档）') + btn('reject', '退回修改') + btn('edit', '编辑');
     default:
       return '';
   }
 }
+
+// ---- Task editor modal ----
+
+const editModal = document.getElementById('edit-modal');
+const editForm = document.getElementById('edit-form');
+let editingTask = null;
+
+function toLocalInput(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function openEditor(task) {
+  editingTask = task;
+  editForm.elements.title.value = task.title || '';
+  editForm.elements.workspacePath.value = task.workspacePath || '';
+  editForm.elements.description.value = task.description || '';
+  editForm.elements.type.value = task.type || '';
+  editForm.elements.tags.value = (task.tags || []).join(', ');
+  editForm.elements.dueAt.value = toLocalInput(task.dueAt);
+  editModal.classList.remove('hidden');
+}
+
+function closeEditor() {
+  editingTask = null;
+  editModal.classList.add('hidden');
+}
+
+editForm.addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  if (!editingTask) return;
+  const fd = new FormData(editForm);
+  const payload = {
+    title: fd.get('title').trim(),
+    workspacePath: fd.get('workspacePath').trim(),
+    description: fd.get('description'),
+    type: fd.get('type').trim(),
+    tags: fd.get('tags').split(',').map((s) => s.trim()).filter(Boolean),
+    dueAt: fd.get('dueAt') ? new Date(fd.get('dueAt')).toISOString() : '',
+  };
+  try {
+    await api(`/api/tasks/${encodeURIComponent(editingTask.id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    closeEditor();
+    await refresh();
+  } catch (err) {
+    alert('保存失败：' + err.message);
+  }
+});
+
+document.getElementById('edit-cancel').addEventListener('click', closeEditor);
+editModal.addEventListener('click', (ev) => {
+  if (ev.target === editModal) closeEditor();
+});
 
 function render() {
   const frag = document.createDocumentFragment();
@@ -170,9 +230,52 @@ async function performAction(action, id) {
     });
   } else if (['block', 'unblock', 'complete', 'archive', 'reject'].includes(action)) {
     await api(`/api/tasks/${idEnc}/${action}`, { method: 'POST' });
+  } else if (action === 'edit') {
+    const task = tasks.find((t) => t.id === id);
+    if (task) openEditor(task);
   }
-  await refresh();
+  if (action !== 'edit') await refresh();
 }
+
+// ---- Agents panel ----
+
+const agentList = document.getElementById('agent-list');
+const agentForm = document.getElementById('agent-form');
+
+function renderAgentList() {
+  agentList.replaceChildren();
+  for (const agent of agents) {
+    const li = document.createElement('li');
+    li.className = 'agent-item';
+    const initial = (agent.name || agent.id).trim().charAt(0) || '?';
+    const avatar = agent.avatar
+      ? `<span class="avatar avatar-custom">${esc(agent.avatar)}</span>`
+      : `<span class="avatar" style="background:hsl(${hashHue(agent.id)} 60% 45%)">${esc(initial)}</span>`;
+    li.innerHTML = `${avatar}<span class="agent-name">${esc(agent.name || agent.id)}</span><code>${esc(agent.id)}</code>`;
+    agentList.appendChild(li);
+  }
+}
+
+agentForm.addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const fd = new FormData(agentForm);
+  const payload = { id: fd.get('id').trim() };
+  const name = fd.get('name').trim();
+  const avatar = fd.get('avatar').trim();
+  if (name) payload.name = name;
+  if (avatar) payload.avatar = avatar;
+  try {
+    await api('/api/agents', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    agentForm.reset();
+    await refresh();
+  } catch (err) {
+    alert('保存 agent 失败：' + err.message);
+  }
+});
 
 // ---- Archived history view ----
 

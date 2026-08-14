@@ -24,6 +24,7 @@ func New(s *store.Store, ui fs.FS) http.Handler {
 	r.Route("/api/tasks", func(r chi.Router) {
 		r.Get("/", handleListTasks(s))
 		r.Post("/", handleCreateTask(s))
+		r.Patch("/{id}", handlePatchTask(s))
 		r.Post("/{id}/claim", handleClaim(s))
 		r.Post("/{id}/block", transitionHandler(s, s.Block, "block"))
 		r.Post("/{id}/unblock", transitionHandler(s, s.Unblock, "unblock"))
@@ -32,6 +33,7 @@ func New(s *store.Store, ui fs.FS) http.Handler {
 		r.Post("/{id}/reject", transitionHandler(s, s.Reject, "reject"))
 	})
 	r.Get("/api/agents", handleListAgents(s))
+	r.Post("/api/agents", handleUpsertAgent(s))
 
 	r.Handle("/*", http.FileServer(http.FS(ui)))
 	return r
@@ -196,6 +198,106 @@ func handleListAgents(s *store.Store) http.HandlerFunc {
 			agents = []store.Agent{}
 		}
 		writeJSON(w, http.StatusOK, agents)
+	}
+}
+
+type patchTaskRequest struct {
+	Title         *string   `json:"title"`
+	WorkspacePath *string   `json:"workspacePath"`
+	Description   *string   `json:"description"`
+	Type          *string   `json:"type"`
+	Tags          *[]string `json:"tags"`
+	DueAt         *string   `json:"dueAt"`
+}
+
+// handlePatchTask edits a task's human-editable fields. System fields
+// (status, claimedBy, completedAt, createdAt) can never be changed here;
+// unknown JSON fields are ignored. Empty string clears an optional field,
+// empty dueAt clears the due date, null means "leave unchanged".
+func handlePatchTask(s *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		var req patchTaskRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid JSON body: "+err.Error())
+			return
+		}
+		u := store.TaskUpdate{
+			Description: req.Description,
+			Type:        req.Type,
+			Tags:        req.Tags,
+		}
+		if req.Title != nil {
+			title := strings.TrimSpace(*req.Title)
+			if title == "" {
+				writeError(w, http.StatusUnprocessableEntity, "title cannot be empty")
+				return
+			}
+			u.Title = &title
+		}
+		if req.WorkspacePath != nil {
+			wp := strings.TrimSpace(*req.WorkspacePath)
+			if wp == "" {
+				writeError(w, http.StatusUnprocessableEntity, "workspacePath cannot be empty")
+				return
+			}
+			u.WorkspacePath = &wp
+		}
+		if req.DueAt != nil {
+			if *req.DueAt == "" {
+				u.ClearDueAt = true
+			} else {
+				parsed, err := time.Parse(time.RFC3339, *req.DueAt)
+				if err != nil {
+					writeError(w, http.StatusUnprocessableEntity, "dueAt must be an RFC3339 timestamp")
+					return
+				}
+				u.DueAt = &parsed
+			}
+		}
+		task, err := s.UpdateTask(id, u)
+		switch {
+		case errors.Is(err, store.ErrNotFound):
+			writeError(w, http.StatusNotFound, "task not found")
+		case err != nil:
+			writeError(w, http.StatusInternalServerError, "update task: "+err.Error())
+		default:
+			writeJSON(w, http.StatusOK, task)
+		}
+	}
+}
+
+type agentRequest struct {
+	ID     string  `json:"id"`
+	Name   string  `json:"name"`
+	Avatar *string `json:"avatar"`
+}
+
+// handleUpsertAgent pre-configures or updates an agent's display identity
+// (id + name + avatar). Recurring agents then show their configured avatar
+// on every card they claim.
+func handleUpsertAgent(s *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req agentRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid JSON body: "+err.Error())
+			return
+		}
+		req.ID = strings.TrimSpace(req.ID)
+		if req.ID == "" {
+			writeError(w, http.StatusUnprocessableEntity, "agent id is required")
+			return
+		}
+		agent, err := s.UpsertAgent(store.Agent{
+			ID:     req.ID,
+			Name:   strings.TrimSpace(req.Name),
+			Avatar: req.Avatar,
+		})
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "upsert agent: "+err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, agent)
 	}
 }
 
