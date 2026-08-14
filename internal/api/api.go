@@ -131,13 +131,13 @@ func handleListTasks(s *store.Store) http.HandlerFunc {
 		if status == "active" {
 			status = ""
 		}
-		switch status {
+		switch store.Status(status) {
 		case "", store.StatusArchived:
 		default:
 			writeError(w, http.StatusBadRequest, "invalid status filter: "+status)
 			return
 		}
-		tasks, err := s.ListTasks(status)
+		tasks, err := s.ListTasks(store.Status(status))
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "list tasks: "+err.Error())
 			return
@@ -255,7 +255,7 @@ func handlePatchTask(s *store.Store) http.HandlerFunc {
 		}
 		if req.Status != nil {
 			status := strings.TrimSpace(*req.Status)
-			switch status {
+			switch store.Status(status) {
 			case store.StatusTodo, store.StatusInProgress, store.StatusBlocked,
 				store.StatusAwaitingConfirmation, store.StatusArchived:
 			default:
@@ -268,7 +268,7 @@ func handlePatchTask(s *store.Store) http.HandlerFunc {
 				writeStoreTransitionError(w, err, "update")
 				return
 			}
-			task, err = s.SetStatus(id, status)
+			task, err = s.SetStatus(id, store.Status(status))
 			if err != nil {
 				writeStoreTransitionError(w, err, "set status")
 				return

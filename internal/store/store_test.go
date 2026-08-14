@@ -627,7 +627,7 @@ func TestRecycleReturnsToTodo(t *testing.T) {
 	}
 	for _, setup := range []struct {
 		id     string
-		status string
+		status store.Status
 		move   func(id string) error
 	}{
 		{id: "t2", status: store.StatusBlocked, move: func(id string) error { _, err := s.Block(id); return err }},

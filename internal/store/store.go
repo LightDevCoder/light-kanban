@@ -17,13 +17,17 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// Status is a task's column/state, one of the fixed five tokens of the spec
+// state machine. A named type so transitions can't take arbitrary strings.
+type Status string
+
 // Status tokens.
 const (
-	StatusTodo                 = "todo"
-	StatusInProgress           = "in_progress"
-	StatusBlocked              = "blocked"
-	StatusAwaitingConfirmation = "awaiting_confirmation"
-	StatusArchived             = "archived"
+	StatusTodo                 Status = "todo"
+	StatusInProgress           Status = "in_progress"
+	StatusBlocked              Status = "blocked"
+	StatusAwaitingConfirmation Status = "awaiting_confirmation"
+	StatusArchived             Status = "archived"
 )
 
 // Sentinel errors.
@@ -38,7 +42,7 @@ type Task struct {
 	Title         string     `json:"title"`
 	WorkspacePath string     `json:"workspacePath"`
 	Description   *string    `json:"description"`
-	Status        string     `json:"status"`
+	Status        Status     `json:"status"`
 	ClaimedBy     *string    `json:"claimedBy"`
 	Type          *string    `json:"type"`
 	Tags          []string   `json:"tags"`
@@ -133,6 +137,7 @@ func scanTask(row rowScanner) (Task, error) {
 		t           Task
 		desc, typ   sql.NullString
 		claimedBy   sql.NullString
+		status      string
 		tags        string
 		createdAt   string
 		updatedAt   string
@@ -140,9 +145,10 @@ func scanTask(row rowScanner) (Task, error) {
 		dueAt       sql.NullString
 		err         error
 	)
-	if err = row.Scan(&t.ID, &t.Title, &t.WorkspacePath, &desc, &t.Status, &claimedBy, &typ, &tags, &createdAt, &updatedAt, &completedAt, &dueAt); err != nil {
+	if err = row.Scan(&t.ID, &t.Title, &t.WorkspacePath, &desc, &status, &claimedBy, &typ, &tags, &createdAt, &updatedAt, &completedAt, &dueAt); err != nil {
 		return Task{}, err
 	}
+	t.Status = Status(status)
 	t.Description = nullStringPtr(desc)
 	t.Type = nullStringPtr(typ)
 	t.ClaimedBy = nullStringPtr(claimedBy)
@@ -232,15 +238,15 @@ func (s *Store) GetTask(id string) (Task, error) {
 
 // ListTasks returns tasks. status "" returns all active (non-archived) tasks,
 // StatusArchived returns the archived history, anything else is an error.
-func (s *Store) ListTasks(status string) ([]Task, error) {
+func (s *Store) ListTasks(status Status) ([]Task, error) {
 	query := `SELECT ` + taskColumns + ` FROM tasks`
 	var order string
 	switch status {
 	case "":
-		query += ` WHERE status != '` + StatusArchived + `'`
+		query += ` WHERE status != '` + string(StatusArchived) + `'`
 		order = `created_at DESC`
 	case StatusArchived:
-		query += ` WHERE status = '` + StatusArchived + `'`
+		query += ` WHERE status = '` + string(StatusArchived) + `'`
 		order = `completed_at DESC`
 	default:
 		return nil, fmt.Errorf("invalid status filter %q", status)
@@ -401,7 +407,7 @@ func (s *Store) Recycle(id string) (Task, error) {
 	return s.simpleTransition(id, StatusInProgress, StatusTodo, []string{"claimed_by = NULL"}, nil)
 }
 
-func (s *Store) simpleTransition(id, from, to string, extraSet []string, extraArgs []any) (Task, error) {
+func (s *Store) simpleTransition(id string, from, to Status, extraSet []string, extraArgs []any) (Task, error) {
 	sets := append([]string{"status = ?", "updated_at = ?"}, extraSet...)
 	args := append([]any{to, formatTime(time.Now().UTC())}, extraArgs...)
 	args = append(args, id, from)
@@ -422,7 +428,7 @@ func (s *Store) simpleTransition(id, from, to string, extraSet []string, extraAr
 // "manually move or edit a card's status"), bypassing the transition guards.
 // Moving to 待处理 drops the claim; moving to 已归档 records the completion
 // date; leaving 已归档 clears it. Unknown statuses are rejected.
-func (s *Store) SetStatus(id, status string) (Task, error) {
+func (s *Store) SetStatus(id string, status Status) (Task, error) {
 	switch status {
 	case StatusTodo, StatusInProgress, StatusBlocked, StatusAwaitingConfirmation, StatusArchived:
 	default:

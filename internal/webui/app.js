@@ -92,8 +92,11 @@ function isSuspectedStuck(task) {
   return Date.now() - updated > STUCK_THRESHOLD_MS;
 }
 
+function tagsHtml(tags) {
+  return (tags || []).map((t) => `<span class="tag">${esc(t)}</span>`).join('');
+}
+
 function cardHtml(task) {
-  const tags = (task.tags || []).map((t) => `<span class="tag">${esc(t)}</span>`).join('');
   const meta = [];
   if (task.type) meta.push(`<span class="chip chip-type">${esc(task.type)}</span>`);
   if (task.dueAt) meta.push(`<span class="chip chip-due">截止 ${esc(fmtTime(task.dueAt))}</span>`);
@@ -104,7 +107,7 @@ function cardHtml(task) {
       <h3 class="card-title">${esc(task.title)} ${stuckBadge} ${agentChip(task)}</h3>
       <div class="card-path" title="workspace 文件夹">${esc(task.workspacePath)}</div>
       ${task.description ? `<p class="card-desc">${esc(task.description)}</p>` : ''}
-      <div class="card-meta">${meta.join('')}${tags}</div>
+      <div class="card-meta">${meta.join('')}${tagsHtml(task.tags)}</div>
       <div class="card-actions">${actionsFor(task)}</div>
     </article>`;
 }
@@ -307,14 +310,13 @@ async function renderHistory() {
     return;
   }
   for (const task of archived) {
-    const tags = (task.tags || []).map((t) => `<span class="tag">${esc(t)}</span>`).join('');
     const row = document.createElement('div');
     row.className = 'history-row';
     row.innerHTML = `
       <div class="history-main">
         <div class="history-title">${esc(task.title)} ${task.type ? `<span class="chip chip-type">${esc(task.type)}</span>` : ''}</div>
         <div class="history-path">${esc(task.workspacePath)}</div>
-        <div class="history-tags">${tags}</div>
+        <div class="history-tags">${tagsHtml(task.tags)}</div>
       </div>
       <div class="history-when">完成于 ${esc(fmtTime(task.completedAt))}</div>`;
     historyList.appendChild(row);
