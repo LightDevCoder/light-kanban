@@ -18,3 +18,7 @@ foreach ($t in $targets) {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     Write-Host "built $out"
 }
+# The docs tell users to run .\dist\light-kanban.exe; keep that name in sync
+# with the current Windows build so it never goes stale.
+Copy-Item (Join-Path $dist 'light-kanban-windows-amd64.exe') (Join-Path $dist 'light-kanban.exe') -Force
+Write-Host "copied light-kanban.exe (current Windows build)"
