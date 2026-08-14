@@ -91,3 +91,48 @@ func TestOpenCreatesSchemaAndTaskRoundTrip(t *testing.T) {
 		t.Fatalf("GetTask(no-such-id) = %v, want ErrNotFound", err)
 	}
 }
+
+// Issue 02: listing returns the created tasks; the archived filter is accepted
+// (empty here) and unknown filters are rejected.
+func TestListTasksReturnsActiveAndRejectsUnknownFilter(t *testing.T) {
+	s := mustOpen(t, filepath.Join(t.TempDir(), "test.db"))
+
+	for _, tc := range []store.Task{
+		{ID: "t1", Title: "First", WorkspacePath: "w1"},
+		{ID: "t2", Title: "Second", WorkspacePath: "w2"},
+	} {
+		if _, err := s.CreateTask(tc); err != nil {
+			t.Fatalf("CreateTask(%s): %v", tc.ID, err)
+		}
+	}
+
+	active, err := s.ListTasks("")
+	if err != nil {
+		t.Fatalf("ListTasks: %v", err)
+	}
+	if len(active) != 2 {
+		t.Fatalf("ListTasks(\"\") = %d tasks, want 2", len(active))
+	}
+	titles := map[string]bool{}
+	for _, task := range active {
+		titles[task.Title] = true
+		if task.Status != store.StatusTodo {
+			t.Errorf("task %s status = %q, want %q", task.ID, task.Status, store.StatusTodo)
+		}
+	}
+	if !titles["First"] || !titles["Second"] {
+		t.Errorf("ListTasks missing tasks, got %v", titles)
+	}
+
+	archived, err := s.ListTasks(store.StatusArchived)
+	if err != nil {
+		t.Fatalf("ListTasks(archived): %v", err)
+	}
+	if len(archived) != 0 {
+		t.Errorf("ListTasks(archived) = %d tasks, want 0", len(archived))
+	}
+
+	if _, err := s.ListTasks("bogus"); err == nil {
+		t.Error("ListTasks(bogus) should error")
+	}
+}

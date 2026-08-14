@@ -6,8 +6,8 @@
 
 **Status:** ready-for-agent
 
-- [ ] `POST /api/tasks` with title + workspacePath creates a task with status 待处理.
-- [ ] `GET /api/tasks` returns the created task with all its fields.
-- [ ] The web UI shows four columns with the correct titles and colors.
-- [ ] A newly created task appears in the 待处理 column.
-- [ ] Creating a task without a title or without a workspacePath is rejected with a clear error.
+- [x] `POST /api/tasks` with title + workspacePath creates a task with status 待处理.
+- [x] `GET /api/tasks` returns the created task with all its fields.
+- [x] The web UI shows four columns with the correct titles and colors.
+- [x] A newly created task appears in the 待处理 column.
+- [x] Creating a task without a title or without a workspacePath is rejected with a clear error.

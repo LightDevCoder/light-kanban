@@ -5,6 +5,7 @@ body {
   background: #f3f4f6;
   color: #1f2937;
 }
+
 .topbar {
   display: flex;
   align-items: center;
@@ -17,3 +18,112 @@ body {
 .connection { font-size: 14px; }
 .connection.ok { color: #22c55e; }
 .connection.bad { color: #ef4444; }
+
+.add-task {
+  padding: 12px 20px;
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+}
+.add-task form { display: flex; flex-direction: column; gap: 8px; }
+.add-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.add-row input, .add-task textarea {
+  padding: 7px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+}
+.add-row input[name="title"] { flex: 2 1 200px; }
+.add-row input[name="workspacePath"] { flex: 2 1 200px; }
+.add-row input[name="type"] { flex: 1 1 110px; }
+.add-row input[name="tags"] { flex: 1 1 160px; }
+.add-row input[name="dueAt"] { flex: 1 1 150px; }
+.add-row button {
+  padding: 7px 16px;
+  border: none;
+  border-radius: 6px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+}
+.add-row button:hover { background: #1d4ed8; }
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(240px, 1fr));
+  gap: 14px;
+  padding: 16px 20px;
+  align-items: start;
+}
+
+.column {
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+}
+.column-title {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 15px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.column-count {
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+.column-body {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 60px;
+}
+
+/* 列头颜色：待处理=灰, 处理中=黄, 遇到阻碍=红, 等你确认=绿 */
+.column-gray .column-title   { background: #9ca3af; color: #fff; }
+.column-yellow .column-title { background: #eab308; color: #422006; }
+.column-red .column-title    { background: #ef4444; color: #fff; }
+.column-green .column-title  { background: #22c55e; color: #052e16; }
+
+.card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 10px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+.card-title { margin: 0 0 4px; font-size: 14px; line-height: 1.35; }
+.card-path {
+  font-size: 12px;
+  color: #6b7280;
+  font-family: Consolas, monospace;
+  word-break: break-all;
+  margin-bottom: 4px;
+}
+.card-desc { margin: 4px 0; font-size: 12px; color: #4b5563; }
+.card-meta { display: flex; flex-wrap: wrap; gap: 4px; }
+.tag, .chip {
+  font-size: 11px;
+  border-radius: 4px;
+  padding: 1px 6px;
+  background: #eef2ff;
+  color: #4338ca;
+}
+.chip-type { background: #ecfdf5; color: #047857; }
+.chip-due { background: #fffbeb; color: #92400e; }
+.card-actions { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+.card-actions button {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  cursor: pointer;
+}
+.card-actions button:hover { background: #f3f4f6; }

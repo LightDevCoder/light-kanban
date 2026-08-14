@@ -9,9 +9,27 @@
 <body>
   <header class="topbar">
     <h1>Light-Kanban 任务看板</h1>
-    <div id="connection" class="connection ok">●</div>
+    <div class="topbar-right">
+      <span id="connection" class="connection ok" title="连接状态">●</span>
+    </div>
   </header>
+
+  <section class="add-task">
+    <form id="add-form" autocomplete="off">
+      <div class="add-row">
+        <input name="title" placeholder="任务标题 *" required>
+        <input name="workspacePath" placeholder="workspace 文件夹路径 *" required>
+        <input name="type" placeholder="类型（可选）">
+        <input name="tags" placeholder="标签，逗号分隔（可选）">
+        <input name="dueAt" type="datetime-local" title="截止时间（可选）">
+        <button type="submit">添加任务</button>
+      </div>
+      <textarea name="description" rows="2" placeholder="描述 / 指令正文（可选）"></textarea>
+    </form>
+  </section>
+
   <main id="board" class="board"></main>
+
   <script src="/app.js"></script>
 </body>
 </html>
