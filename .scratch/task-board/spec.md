@@ -98,6 +98,8 @@ Status: ready-for-agent
   | `POST /api/tasks/:id/recycle` | 处理中 → 待处理, drops the claim (human; orphan reclaim, issue 07) |
   | `GET /api/agents` | list agents |
   | `POST /api/agents` | pre-configure an agent (human) |
+  | `GET /api/fs/dirs?path=<abs>` | list subdirectories of an absolute path (workspace-folder browser; `..` and relative paths rejected; empty path = platform roots) |
+  | `POST /api/fs/pick` | open the server's native folder dialog on the operator's machine; returns `{"path": "<abs>"}` (`""` = canceled) |
 
 - **Realtime**: polling only, no WebSocket in v1. The web UI refreshes on an interval; single-user traffic makes this cheap.
 - **Board scope**: one global board in v1. All projects' tasks share the four columns; `workspacePath` / type / tags distinguish them. A `boardId` can be added later without breaking data.

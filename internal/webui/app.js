@@ -276,11 +276,18 @@ function openBrowser(input) {
   loadBrowse('');
 }
 
+// A path the server will accept: absolute per its platform rules.
+function isAbsolutePath(p) {
+  return p.startsWith('/') || /^[A-Za-z]:[\\/]/.test(p);
+}
+
 async function loadBrowse(path) {
   try {
-    const res = await api('/api/fs/dirs?path=' + encodeURIComponent(path));
+    // Never send a non-absolute path: reset to roots instead of a 400.
+    const q = path && isAbsolutePath(path) ? '?path=' + encodeURIComponent(path) : '';
+    const res = await api('/api/fs/dirs' + q);
     browseCtx.path = res.path;
-    browsePathEl.textContent = res.path || '（磁盘根目录，点下方盘符进入）';
+    browsePathEl.textContent = res.path || '（根目录，点击下方路径进入）';
     browsePathEl.title = res.path;
     browseListing.replaceChildren();
     if (!res.dirs.length) {
@@ -328,6 +335,27 @@ document.querySelectorAll('[data-browse-target]').forEach((btn) => {
       ? editForm.elements.workspacePath
       : document.querySelector('#add-form input[name="workspacePath"]');
     openBrowser(input);
+  });
+});
+
+// ---- 系统原生文件夹选择（服务端弹窗，仅在服务器本机可见）----
+
+async function pickSystemFolder(input) {
+  try {
+    const res = await api('/api/fs/pick', { method: 'POST' });
+    if (res.path) input.value = res.path;
+  } catch (err) {
+    alert('系统选择失败：' + err.message);
+  }
+}
+
+document.querySelectorAll('[data-pick-target]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const target = btn.dataset.pickTarget;
+    const input = target === 'edit'
+      ? editForm.elements.workspacePath
+      : document.querySelector('#add-form input[name="workspacePath"]');
+    pickSystemFolder(input);
   });
 });
 

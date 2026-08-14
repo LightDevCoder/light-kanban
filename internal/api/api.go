@@ -2,6 +2,7 @@
 package api
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/json"
 	"errors"
@@ -9,6 +10,7 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -39,6 +41,7 @@ func New(s *store.Store, ui fs.FS) http.Handler {
 	r.Get("/api/agents", handleListAgents(s))
 	r.Post("/api/agents", handleUpsertAgent(s))
 	r.Get("/api/fs/dirs", handleBrowseDirs())
+	r.Post("/api/fs/pick", handlePickDir())
 
 	r.Handle("/*", http.FileServer(http.FS(ui)))
 	return r
@@ -335,7 +338,7 @@ func handleBrowseDirs() http.HandlerFunc {
 			return
 		}
 		if !filepath.IsAbs(raw) {
-			writeError(w, http.StatusBadRequest, "path must be absolute")
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("path must be absolute: got %q", r.URL.Query().Get("path")))
 			return
 		}
 		// Check ".." on the raw path: filepath.Clean would swallow it.
@@ -378,6 +381,77 @@ func platformRoots() []string {
 		}
 	}
 	return roots
+}
+
+// pickDir opens the server's native folder picker and returns the chosen
+// absolute path ("" when the user cancels). Injectable for tests.
+var pickDir = defaultPickDir
+
+// handlePickDir lets the operator pick a workspace folder with the real OS
+// dialog (the board runs on their own machine). Browsers never expose
+// absolute paths from their own pickers, so the server opens its own.
+func handlePickDir() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Minute)
+		defer cancel()
+		path, err := pickDirWith(ctx)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "folder picker failed: "+err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"path": path})
+	}
+}
+
+func pickDirWith(ctx context.Context) (string, error) {
+	done := make(chan struct {
+		path string
+		err  error
+	}, 1)
+	go func() {
+		p, err := pickDir()
+		done <- struct {
+			path string
+			err  error
+		}{p, err}
+	}()
+	select {
+	case res := <-done:
+		return res.path, res.err
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+}
+
+// defaultPickDir shells out to the platform's native folder dialog.
+func defaultPickDir() (string, error) {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		script := `Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.FolderBrowserDialog; if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { $d.SelectedPath }`
+		cmd = exec.Command("powershell.exe", "-NoProfile", "-STA", "-Command", script)
+	case "darwin":
+		cmd = exec.Command("osascript", "-e", `POSIX path of (choose folder)`)
+	case "linux":
+		if _, err := exec.LookPath("zenity"); err == nil {
+			cmd = exec.Command("zenity", "--file-selection", "--directory")
+		} else if _, err := exec.LookPath("kdialog"); err == nil {
+			cmd = exec.Command("kdialog", "--getexistingdirectory")
+		} else {
+			return "", errors.New("no folder picker available (zenity/kdialog)")
+		}
+	default:
+		return "", fmt.Errorf("folder picker not supported on %s", runtime.GOOS)
+	}
+	out, err := cmd.Output()
+	if err != nil {
+		// Canceled dialogs exit non-zero with no path.
+		if len(strings.TrimSpace(string(out))) == 0 {
+			return "", nil
+		}
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
 // writeStoreTransitionError maps store errors onto HTTP responses and

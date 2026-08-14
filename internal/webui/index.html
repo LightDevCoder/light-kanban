@@ -19,8 +19,9 @@
     <form id="add-form" autocomplete="off">
       <div class="add-row">
         <input name="title" placeholder="任务标题 *" required>
-        <input name="workspacePath" placeholder="workspace 文件夹路径 *（可浏览选择）" required>
-        <button type="button" class="browse-btn" data-browse-target="add" title="浏览服务器上的文件夹">浏览…</button>
+        <input name="workspacePath" placeholder="workspace 文件夹路径 *（可浏览或系统选择）" required>
+        <button type="button" class="browse-btn" data-browse-target="add" title="在页面里浏览服务器文件夹">浏览…</button>
+        <button type="button" class="browse-btn" data-pick-target="add" title="调起服务器所在电脑的系统文件夹对话框">系统选择…</button>
         <input name="type" placeholder="类型：单个，如 feature / bug / docs（可选）">
         <input name="tags" placeholder="标签：逗号分隔多个（可选）">
         <input name="dueAt" type="datetime-local" title="截止时间（可选，留空表示无截止）">
@@ -63,7 +64,8 @@
       <label>workspace 文件夹
         <span class="path-row">
           <input name="workspacePath" required>
-          <button type="button" class="browse-btn" data-browse-target="edit" title="浏览服务器上的文件夹">浏览…</button>
+          <button type="button" class="browse-btn" data-browse-target="edit" title="在页面里浏览服务器文件夹">浏览…</button>
+          <button type="button" class="browse-btn" data-pick-target="edit" title="调起服务器所在电脑的系统文件夹对话框">系统选择…</button>
         </span>
       </label>
       <label>描述 / 指令正文 <textarea name="description" rows="3"></textarea></label>
