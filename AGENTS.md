@@ -9,7 +9,7 @@ A single-binary Go kanban board: a human queues tasks (each card points at a wor
 - **Test**: `go test ./...` — tests live at the two agreed seams: HTTP API (`internal/api/api_test.go`) and the store directly (`internal/store/store_test.go`, atomicity/concurrency).
 - **Vet / format**: `go vet ./...`; `gofmt -l internal cmd scripts` (never `gofmt -l .` — `.tools/` is the vendored toolchain).
 - **Cross-compile**: `scripts\cross-build.ps1` → `dist/` binaries: linux (amd64), darwin (amd64 + arm64), windows (amd64).
-- **Data**: SQLite at `-db kanban.db` (default, working directory); `:memory:` accepted.
+- **Data**: SQLite at `-db kanban.db` (default, working directory); `:memory:` accepted. Uploaded agent avatars live in `-avatars avatars` (default, working directory) and are served from `/api/avatars/*`.
 
 ## Agent skills
 

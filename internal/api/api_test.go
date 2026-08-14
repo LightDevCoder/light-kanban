@@ -1,8 +1,11 @@
 package api_test
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -26,7 +29,7 @@ func newServer(t *testing.T) *httptest.Server {
 		t.Fatalf("open store: %v", err)
 	}
 	t.Cleanup(func() { _ = s.Close() })
-	ts := httptest.NewServer(api.New(s, webui.FS))
+	ts := httptest.NewServer(api.New(s, webui.FS, filepath.Join(t.TempDir(), "avatars")))
 	t.Cleanup(ts.Close)
 	return ts
 }
@@ -742,6 +745,96 @@ func TestBrowseDirs(t *testing.T) {
 	}
 	if len(res.Dirs) == 0 {
 		t.Error("roots dirs should not be empty on any platform")
+	}
+}
+
+// Avatar images are uploaded as files and served back; non-images and
+// unknown files are rejected.
+func TestAvatarUploadAndServe(t *testing.T) {
+	ts := newServer(t)
+
+	// A minimal valid 1x1 PNG.
+	png, err := base64.StdEncoding.DecodeString(
+		"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	upload := func(fieldName, fileName string, body []byte, contentType string) (int, []byte) {
+		t.Helper()
+		var buf bytes.Buffer
+		mw := multipart.NewWriter(&buf)
+		if fieldName == "" {
+			// raw body, no multipart
+		} else {
+			fw, err := mw.CreateFormFile(fieldName, fileName)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := fw.Write(body); err != nil {
+				t.Fatal(err)
+			}
+			mw.Close()
+		}
+		req, err := http.NewRequest(http.MethodPost, ts.URL+"/api/avatars", &buf)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if fieldName == "" {
+			req.Header.Set("Content-Type", contentType)
+		} else {
+			req.Header.Set("Content-Type", mw.FormDataContentType())
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		raw, err := io.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp.StatusCode, raw
+	}
+
+	// A PNG upload succeeds and yields a servable path.
+	status, raw := upload("file", "face.png", png, "")
+	if status != http.StatusCreated {
+		t.Fatalf("upload status = %d, want 201 (body: %s)", status, raw)
+	}
+	var res struct {
+		Path string `json:"path"`
+	}
+	if err := json.Unmarshal(raw, &res); err != nil {
+		t.Fatalf("decode upload: %v (%s)", err, raw)
+	}
+	if !strings.HasPrefix(res.Path, "/api/avatars/") {
+		t.Fatalf("avatar path = %q, want /api/avatars/…", res.Path)
+	}
+	getStatus, body := do(t, http.MethodGet, ts.URL+res.Path, "")
+	if getStatus != http.StatusOK {
+		t.Fatalf("GET avatar status = %d, want 200", getStatus)
+	}
+	if !bytes.Equal(body, png) {
+		t.Error("served avatar bytes differ from the upload")
+	}
+
+	// Non-image content is rejected.
+	status, raw = upload("file", "note.txt", []byte("hello world"), "")
+	if status != http.StatusUnprocessableEntity {
+		t.Errorf("text upload status = %d, want 422 (body: %s)", status, raw)
+	}
+
+	// Missing file field is rejected.
+	status, raw = upload("", "", []byte("x"), "application/json")
+	if status != http.StatusBadRequest {
+		t.Errorf("missing field status = %d, want 400 (body: %s)", status, raw)
+	}
+
+	// Unknown avatar files are 404.
+	status, _ = do(t, http.MethodGet, ts.URL+"/api/avatars/no-such.png", "")
+	if status != http.StatusNotFound {
+		t.Errorf("missing avatar status = %d, want 404", status)
 	}
 }
 

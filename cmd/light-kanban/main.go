@@ -14,6 +14,7 @@ import (
 func main() {
 	addr := flag.String("addr", ":8080", "listen address")
 	dbPath := flag.String("db", "kanban.db", "SQLite database path (:memory: accepted)")
+	avatarsDir := flag.String("avatars", "avatars", "directory for uploaded agent avatar images")
 	flag.Parse()
 
 	s, err := store.Open(*dbPath)
@@ -22,7 +23,7 @@ func main() {
 	}
 	defer s.Close()
 
-	handler := api.New(s, webui.FS)
-	log.Printf("light-kanban listening on %s (db: %s)", *addr, *dbPath)
+	handler := api.New(s, webui.FS, *avatarsDir)
+	log.Printf("light-kanban listening on %s (db: %s, avatars: %s)", *addr, *dbPath, *avatarsDir)
 	log.Fatal(http.ListenAndServe(*addr, handler))
 }

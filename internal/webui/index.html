@@ -37,13 +37,13 @@
       <form id="identity-form" class="identity" autocomplete="off">
         <input name="agentId" placeholder="agentId *（接取任务时用）" required>
         <input name="name" placeholder="名称">
-        <input name="avatar" placeholder="头像（emoji）">
+        <input type="file" name="avatarFile" accept="image/png,image/jpeg,image/gif,image/webp" title="头像图片（可选）">
         <button type="submit">保存身份</button>
       </form>
       <form id="agent-form" class="agent-form" autocomplete="off">
         <input name="id" placeholder="预配置 agent id *" required>
         <input name="name" placeholder="名称">
-        <input name="avatar" placeholder="头像（emoji）">
+        <input type="file" name="avatarFile" accept="image/png,image/jpeg,image/gif,image/webp" title="头像图片（可选）">
         <button type="submit">预配置 / 更新</button>
       </form>
       <ul id="agent-list" class="agent-list"></ul>

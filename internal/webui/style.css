@@ -340,6 +340,7 @@ body {
   flex: none;
 }
 .avatar-custom { background: #f3f4f6; }
+.avatar-img { object-fit: cover; background: #e5e7eb; }
 .card-path {
   font-size: 12px;
   color: #6b7280;

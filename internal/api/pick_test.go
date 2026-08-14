@@ -19,7 +19,7 @@ func pickTestServer(t *testing.T) *httptest.Server {
 		t.Fatalf("open store: %v", err)
 	}
 	t.Cleanup(func() { _ = s.Close() })
-	ts := httptest.NewServer(New(s, webui.FS))
+	ts := httptest.NewServer(New(s, webui.FS, filepath.Join(t.TempDir(), "avatars")))
 	t.Cleanup(ts.Close)
 	return ts
 }

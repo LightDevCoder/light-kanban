@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
 	"os"
@@ -22,7 +23,8 @@ import (
 )
 
 // New wires the router: /api/* endpoints plus the embedded UI at the root.
-func New(s *store.Store, ui fs.FS) http.Handler {
+// avatarsDir is where uploaded avatar images are stored and served from.
+func New(s *store.Store, ui fs.FS, avatarsDir string) http.Handler {
 	r := chi.NewRouter()
 
 	r.Get("/api/health", handleHealth(s))
@@ -42,6 +44,8 @@ func New(s *store.Store, ui fs.FS) http.Handler {
 	r.Post("/api/agents", handleUpsertAgent(s))
 	r.Get("/api/fs/dirs", handleBrowseDirs())
 	r.Post("/api/fs/pick", handlePickDir())
+	r.Post("/api/avatars", handleUploadAvatar(avatarsDir))
+	r.Get("/api/avatars/*", handleAvatarFile(avatarsDir))
 
 	r.Handle("/*", http.FileServer(http.FS(ui)))
 	return r
@@ -381,6 +385,85 @@ func platformRoots() []string {
 		}
 	}
 	return roots
+}
+
+// maxAvatarBytes caps uploaded avatar images at 2 MiB.
+const maxAvatarBytes = 2 << 20
+
+var avatarExtByType = map[string]string{
+	"image/png":  ".png",
+	"image/jpeg": ".jpg",
+	"image/gif":  ".gif",
+	"image/webp": ".webp",
+}
+
+// handleUploadAvatar accepts an image file (multipart field "file"), stores
+// it under avatarsDir and returns its public path. The avatar field of an
+// agent is a string, so a URL path fits the existing API untouched.
+func handleUploadAvatar(dir string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, maxAvatarBytes)
+		if err := r.ParseMultipartForm(maxAvatarBytes); err != nil {
+			writeError(w, http.StatusBadRequest, "avatar upload must be a multipart form under 2 MiB")
+			return
+		}
+		file, _, err := r.FormFile("file")
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "missing file field")
+			return
+		}
+		defer file.Close()
+
+		head := make([]byte, 512)
+		n, err := file.Read(head)
+		if err != nil && err != io.EOF {
+			writeError(w, http.StatusInternalServerError, "read upload: "+err.Error())
+			return
+		}
+		ext, ok := avatarExtByType[http.DetectContentType(head[:n])]
+		if !ok {
+			writeError(w, http.StatusUnprocessableEntity, "avatar must be a PNG/JPEG/GIF/WebP image")
+			return
+		}
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			writeError(w, http.StatusInternalServerError, "create avatars dir: "+err.Error())
+			return
+		}
+		name := newID() + ext
+		dst, err := os.Create(filepath.Join(dir, name))
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "save avatar: "+err.Error())
+			return
+		}
+		defer dst.Close()
+		if _, err := dst.Write(head[:n]); err != nil {
+			writeError(w, http.StatusInternalServerError, "save avatar: "+err.Error())
+			return
+		}
+		if _, err := io.Copy(dst, file); err != nil {
+			writeError(w, http.StatusInternalServerError, "save avatar: "+err.Error())
+			return
+		}
+		writeJSON(w, http.StatusCreated, map[string]string{"path": "/api/avatars/" + name})
+	}
+}
+
+// handleAvatarFile serves stored avatar images by basename only.
+func handleAvatarFile(dir string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		name := filepath.Base(r.URL.Path)
+		if name == "." || name == ".." {
+			writeError(w, http.StatusNotFound, "avatar not found")
+			return
+		}
+		path := filepath.Join(dir, name)
+		if _, err := os.Stat(path); err != nil {
+			writeError(w, http.StatusNotFound, "avatar not found")
+			return
+		}
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+		http.ServeFile(w, r, path)
+	}
 }
 
 // pickDir opens the server's native folder picker and returns the chosen

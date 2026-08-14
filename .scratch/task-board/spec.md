@@ -100,6 +100,8 @@ Status: ready-for-agent
   | `POST /api/agents` | pre-configure an agent (human) |
   | `GET /api/fs/dirs?path=<abs>` | list subdirectories of an absolute path (workspace-folder browser; `..` and relative paths rejected; empty path = platform roots) |
   | `POST /api/fs/pick` | open the server's native folder dialog on the operator's machine; returns `{"path": "<abs>"}` (`""` = canceled) |
+  | `POST /api/avatars` | upload an agent avatar image (multipart field `file`, ≤2 MiB, PNG/JPEG/GIF/WebP); returns `{"path": "/api/avatars/<id>.<ext>"}` |
+  | `GET /api/avatars/*` | serve stored avatar images |
 
 - **Realtime**: polling only, no WebSocket in v1. The web UI refreshes on an interval; single-user traffic makes this cheap.
 - **Board scope**: one global board in v1. All projects' tasks share the four columns; `workspacePath` / type / tags distinguish them. A `boardId` can be added later without breaking data.

@@ -69,11 +69,19 @@ function agentById(id) {
   return agents.find((a) => a.id === id) || null;
 }
 
-// Avatar: explicit avatar wins; otherwise hash-color + first character of name.
+// Avatar: image file (URL path) wins, then legacy text/emoji, then
+// hash-color + first character of name.
+function isImageAvatar(v) {
+  return typeof v === 'string' && (v.startsWith('/') || v.startsWith('http://') || v.startsWith('https://'));
+}
+
 function avatarHtml(agent) {
   const id = agent.id || '';
   const initial = (agent.name || id).trim().charAt(0) || '?';
   if (agent.avatar) {
+    if (isImageAvatar(agent.avatar)) {
+      return `<img class="avatar avatar-img" src="${esc(agent.avatar)}" alt="头像" title="${esc(agent.name || id)}">`;
+    }
     return `<span class="avatar avatar-custom">${esc(agent.avatar)}</span>`;
   }
   return `<span class="avatar" style="background:hsl(${hashHue(id)} 60% 45%)">${esc(initial)}</span>`;
@@ -123,6 +131,8 @@ const STATUS_ACTIONS = {
 function actionsFor(task) {
   const id = esc(task.id);
   return (STATUS_ACTIONS[task.status] || [])
+    // 接取是 agent 通过 API 做的动作：只有保存过 agent 身份才显示按钮
+    .filter(([action]) => action !== 'claim' || Boolean(identity().agentId))
     .map(([action, label]) => `<button data-action="${action}" data-id="${id}">${label}</button>`)
     .join('');
 }
@@ -212,28 +222,56 @@ function render() {
   boardEl.replaceChildren(frag);
 }
 
+// ---- Agent identity (saved locally; agents normally claim via the API) ----
+
+let savedIdentity = loadIdentity();
+
+function loadIdentity() {
+  try {
+    return JSON.parse(localStorage.getItem('lk-identity') || '{}');
+  } catch {
+    return {};
+  }
+}
+
 function identity() {
-  const form = document.getElementById('identity-form');
-  const agentId = form.elements.agentId.value.trim();
-  const name = form.elements.name.value.trim();
-  const avatar = form.elements.avatar.value.trim();
-  return { agentId, name, avatar };
+  return savedIdentity;
+}
+
+async function uploadAvatarFile(file) {
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await api('/api/avatars', { method: 'POST', body: fd });
+  return res.path;
 }
 
 function wireIdentityForm() {
   const form = document.getElementById('identity-form');
-  const saved = localStorage.getItem('lk-identity');
-  if (saved) {
-    try {
-      const id = JSON.parse(saved);
-      form.elements.agentId.value = id.agentId || '';
-      form.elements.name.value = id.name || '';
-      form.elements.avatar.value = id.avatar || '';
-    } catch { /* ignore corrupt storage */ }
+  if (savedIdentity.agentId) {
+    form.elements.agentId.value = savedIdentity.agentId || '';
+    form.elements.name.value = savedIdentity.name || '';
   }
-  form.addEventListener('submit', (ev) => {
+  form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
-    localStorage.setItem('lk-identity', JSON.stringify(identity()));
+    const agentId = form.elements.agentId.value.trim();
+    if (!agentId) {
+      alert('agentId 必填。');
+      return;
+    }
+    const name = form.elements.name.value.trim();
+    const file = form.elements.avatarFile.files && form.elements.avatarFile.files[0];
+    try {
+      let avatar = savedIdentity.avatar || '';
+      if (file) {
+        avatar = await uploadAvatarFile(file);
+      }
+      savedIdentity = { agentId, name, avatar };
+      localStorage.setItem('lk-identity', JSON.stringify(savedIdentity));
+      form.elements.avatarFile.value = '';
+      await refresh();
+    } catch (err) {
+      alert('保存身份失败：' + err.message);
+    }
   });
 }
 
@@ -379,10 +417,12 @@ agentForm.addEventListener('submit', async (ev) => {
   const fd = new FormData(agentForm);
   const payload = { id: fd.get('id').trim() };
   const name = fd.get('name').trim();
-  const avatar = fd.get('avatar').trim();
   if (name) payload.name = name;
-  if (avatar) payload.avatar = avatar;
+  const file = fd.get('avatarFile');
   try {
+    if (file && file.size) {
+      payload.avatar = await uploadAvatarFile(file);
+    }
     await api('/api/agents', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
