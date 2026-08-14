@@ -552,5 +552,64 @@ boardEl.addEventListener('click', async (ev) => {
   }
 });
 
+// ---- 首次使用引导向导（与 README 的 Quick Start 同一步骤）----
+// 首次访问自动弹出；「跳过」或「开始使用」后本浏览器不再自动弹出，
+// 随时可点顶栏「使用向导」重开。
+
+const WIZARD_KEY = 'lk-wizard-seen';
+const wizardModal = document.getElementById('wizard-modal');
+const wizardSteps = Array.from(document.querySelectorAll('#wizard-steps .wizard-step'));
+const wizardDots = document.getElementById('wizard-dots');
+const wizardPrev = document.getElementById('wizard-prev');
+const wizardNext = document.getElementById('wizard-next');
+const wizardFinish = document.getElementById('wizard-finish');
+let wizardIndex = 0;
+
+function renderWizard() {
+  wizardSteps.forEach((s, i) => s.classList.toggle('hidden', i !== wizardIndex));
+  wizardDots.replaceChildren();
+  wizardSteps.forEach((_, i) => {
+    const dot = document.createElement('span');
+    dot.className = 'wizard-dot' + (i === wizardIndex ? ' active' : i < wizardIndex ? ' done' : '');
+    wizardDots.appendChild(dot);
+  });
+  wizardPrev.classList.toggle('hidden', wizardIndex === 0);
+  wizardNext.classList.toggle('hidden', wizardIndex === wizardSteps.length - 1);
+  wizardFinish.classList.toggle('hidden', wizardIndex !== wizardSteps.length - 1);
+}
+
+function openWizard() {
+  wizardIndex = 0;
+  renderWizard();
+  wizardModal.classList.remove('hidden');
+}
+
+function closeWizard() {
+  wizardModal.classList.add('hidden');
+  localStorage.setItem(WIZARD_KEY, '1');
+}
+
+wizardPrev.addEventListener('click', () => {
+  if (wizardIndex > 0) {
+    wizardIndex--;
+    renderWizard();
+  }
+});
+wizardNext.addEventListener('click', () => {
+  if (wizardIndex < wizardSteps.length - 1) {
+    wizardIndex++;
+    renderWizard();
+  }
+});
+wizardFinish.addEventListener('click', closeWizard);
+document.getElementById('wizard-skip').addEventListener('click', closeWizard);
+wizardModal.addEventListener('click', (ev) => {
+  if (ev.target === wizardModal) closeWizard();
+});
+document.getElementById('wizard-open').addEventListener('click', openWizard);
+
 refresh();
 setInterval(refresh, REFRESH_MS);
+
+// 首次访问自动弹出引导（勾过「不再自动显示」或点过跳过则不再弹出）
+if (!localStorage.getItem(WIZARD_KEY)) openWizard();

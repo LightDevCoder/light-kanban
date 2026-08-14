@@ -11,6 +11,7 @@
     <h1>Light-Kanban 任务看板</h1>
     <div class="topbar-right">
       <button id="add-task-btn" class="primary-btn" type="button">＋ 添加任务</button>
+      <button id="wizard-open" class="ghost-btn" type="button" title="重新打开使用引导">使用向导</button>
       <button id="history-toggle" class="ghost-btn" type="button">归档历史</button>
       <span id="connection" class="connection ok" title="连接状态">●</span>
     </div>
@@ -96,6 +97,57 @@
         <button type="button" id="browse-up">上级</button>
         <button type="button" id="browse-select">选择此文件夹</button>
         <button type="button" id="browse-cancel">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 首次使用引导向导 -->
+  <div id="wizard-modal" class="modal-backdrop hidden">
+    <div class="modal wizard-modal">
+      <h3>欢迎使用 Light-Kanban 任务看板</h3>
+      <div id="wizard-steps" class="wizard-steps">
+        <section class="wizard-step">
+          <h4>① 添加任务</h4>
+          <p>点右上角「＋ 添加任务」，在弹窗里填写：</p>
+          <ul>
+            <li><b>标题</b>：要让 agent 做什么</li>
+            <li><b>workspace 文件夹</b>：该任务的项目文件夹路径（可「浏览…」或「系统选择…」）</li>
+            <li>可选：描述 / 标签 / 截止时间</li>
+          </ul>
+          <p>添加后任务出现在<b>待处理</b>列，agent 就可以接取了。</p>
+        </section>
+        <section class="wizard-step hidden">
+          <h4>② Agent 接取（agent 自己做）</h4>
+          <p>告诉你的 agent 通过 API 自己注册并接取：</p>
+          <pre><code>GET  /api/tasks                     # 找到任务和它的 id
+POST /api/avatars                   # 上传头像图片（multipart file）
+POST /api/tasks/&lt;id&gt;/claim      # body: {"agentId","name","avatar"}</code></pre>
+          <p>接取约束：<code>name</code> 用工具名，<code>avatar</code> 必须是真实图片（上传的路径或 http(s) 图片 URL），伪造路径会被 422 拒绝。接取后卡片显示 agent 的头像和名称。</p>
+        </section>
+        <section class="wizard-step hidden">
+          <h4>③ 干活与状态流转（agent 通过 API）</h4>
+          <p>agent 干活时通过 API 更新状态，你只需要看四列：</p>
+          <ul>
+            <li><code>POST /api/tasks/&lt;id&gt;/block</code> — 遇到阻碍 → <b>遇到阻碍</b>列</li>
+            <li><code>POST /api/tasks/&lt;id&gt;/unblock</code> — 解除阻碍 → <b>处理中</b>列</li>
+            <li><code>POST /api/tasks/&lt;id&gt;/complete</code> — 干完交回 → <b>等你确认</b>列</li>
+          </ul>
+        </section>
+        <section class="wizard-step hidden">
+          <h4>④ 验收与归档</h4>
+          <p>任务到「等你确认」后由你验收：</p>
+          <ul>
+            <li>通过 → 点卡片上的「验收通过（归档）」，任务进入<b>归档历史</b>（右上「归档历史」弹窗，可单条 / 全选删除）</li>
+            <li>不通过 → 直接命令 agent 修改，它自己调 API 把任务退回<b>处理中</b></li>
+          </ul>
+        </section>
+      </div>
+      <div id="wizard-dots" class="wizard-dots"></div>
+      <div class="modal-actions">
+        <button type="button" id="wizard-skip">跳过</button>
+        <button type="button" id="wizard-prev" class="hidden">上一步</button>
+        <button type="button" id="wizard-next">下一步</button>
+        <button type="button" id="wizard-finish" class="hidden">开始使用</button>
       </div>
     </div>
   </div>

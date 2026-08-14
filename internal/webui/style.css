@@ -199,6 +199,26 @@ body {
 }
 .delete-btn:hover { background: #fef2f2; }
 
+/* ---- 使用引导向导 ---- */
+.wizard-modal { width: min(560px, 92vw); }
+.wizard-steps { font-size: 13px; color: #374151; line-height: 1.6; }
+.wizard-steps h4 { margin: 0 0 6px; font-size: 15px; }
+.wizard-steps p { margin: 6px 0; }
+.wizard-steps ul { margin: 4px 0; padding-left: 18px; }
+.wizard-steps li { margin: 2px 0; }
+.wizard-steps code, .wizard-steps pre {
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 12px;
+  background: #f3f4f6;
+  border-radius: 4px;
+}
+.wizard-steps code { padding: 1px 5px; }
+.wizard-steps pre { padding: 8px 10px; overflow-x: auto; margin: 6px 0; }
+.wizard-dots { display: flex; gap: 6px; justify-content: center; padding: 4px 0 2px; }
+.wizard-dot { width: 8px; height: 8px; border-radius: 50%; background: #d1d5db; }
+.wizard-dot.active { background: #2563eb; }
+.wizard-dot.done { background: #93c5fd; }
+
 .board {
   display: grid;
   grid-template-columns: repeat(4, minmax(240px, 1fr));

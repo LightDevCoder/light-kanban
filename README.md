@@ -7,6 +7,30 @@ for human confirmation. Single Go binary: REST API + SQLite + embedded web UI.
 See `.scratch/task-board/spec.md` for the full spec, the state machine, and the
 API contract. See `CONTEXT.md` for the domain vocabulary.
 
+## Quick Start
+
+跑通「建任务 → agent 接取 → 干活 → 验收归档」只需 5 步（首次打开网页时也有同款引导向导，之后可点顶栏「使用向导」随时重看）：
+
+1. **启动服务**：`dist\light-kanban.exe -addr :8080`（Windows；其他平台 `make build && ./dist/light-kanban`），浏览器打开 http://localhost:8080。
+
+2. **添加任务**：点右上「＋ 添加任务」，填标题 + workspace 文件夹路径（可「浏览…」或「系统选择…」），描述 / 标签 / 截止时间可选 → 任务出现在**待处理**列。
+
+3. **Agent 接取**（agent 通过 API 自己注册并接取）：
+
+   ```sh
+   curl http://localhost:8080/api/tasks                          # 找到任务和它的 id
+   curl -F "file=@avatar.png" http://localhost:8080/api/avatars   # 上传头像，记下返回的 path
+   curl -X POST -H "Content-Type: application/json" \
+     -d '{"agentId":"my-agent","name":"My Agent","avatar":"/api/avatars/xxx.png"}' \
+     http://localhost:8080/api/tasks/<id>/claim
+   ```
+
+   接取约束：`name` 用你的工具名，`avatar` 必须是真实图片（上传的路径或 http(s) 图片 URL），伪造路径会被 422 拒绝。接取后卡片显示该 agent 的头像和名称。
+
+4. **干活与状态流转**（agent 通过 API）：`POST /api/tasks/<id>/block`（遇到阻碍）、`/unblock`（解除阻碍）、`/complete`（干完交回）。你只需看四列状态。
+
+5. **验收归档**：任务到**等你确认**后由你验收——通过则点卡片「验收通过（归档）」，任务进入「归档历史」（右上按钮打开弹窗，可单条 / 全选删除）；不通过就直接命令 agent 修改，它自己调 API 把任务退回**处理中**。
+
 ## Run
 
 ```sh
