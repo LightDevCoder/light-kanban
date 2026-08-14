@@ -69,14 +69,20 @@ function agentById(id) {
   return agents.find((a) => a.id === id) || null;
 }
 
+// Avatar: explicit avatar wins; otherwise hash-color + first character of name.
+function avatarHtml(agent) {
+  const id = agent.id || '';
+  const initial = (agent.name || id).trim().charAt(0) || '?';
+  if (agent.avatar) {
+    return `<span class="avatar avatar-custom">${esc(agent.avatar)}</span>`;
+  }
+  return `<span class="avatar" style="background:hsl(${hashHue(id)} 60% 45%)">${esc(initial)}</span>`;
+}
+
 function agentChip(task) {
   if (!task.claimedBy) return '';
   const agent = agentById(task.claimedBy) || { id: task.claimedBy, name: task.claimedBy };
-  const initial = (agent.name || agent.id).trim().charAt(0) || '?';
-  const avatar = agent.avatar
-    ? `<span class="avatar avatar-custom">${esc(agent.avatar)}</span>`
-    : `<span class="avatar" style="background:hsl(${hashHue(agent.id)} 60% 45%)">${esc(initial)}</span>`;
-  return `<span class="agent-chip" title="${esc(agent.id)}">${avatar}<span class="agent-name">${esc(agent.name || agent.id)}</span></span>`;
+  return `<span class="agent-chip" title="${esc(agent.id)}">${avatarHtml(agent)}<span class="agent-name">${esc(agent.name || agent.id)}</span></span>`;
 }
 
 function isSuspectedStuck(task) {
@@ -103,21 +109,19 @@ function cardHtml(task) {
     </article>`;
 }
 
+// Status → available actions, shared by every card render.
+const STATUS_ACTIONS = {
+  todo: [['claim', '接取'], ['edit', '编辑']],
+  in_progress: [['block', '阻碍'], ['complete', '完成'], ['recycle', '回收'], ['edit', '编辑']],
+  blocked: [['unblock', '解除阻碍'], ['edit', '编辑']],
+  awaiting_confirmation: [['archive', '验收通过（归档）'], ['reject', '退回修改'], ['edit', '编辑']],
+};
+
 function actionsFor(task) {
   const id = esc(task.id);
-  const btn = (action, label) => `<button data-action="${action}" data-id="${id}">${label}</button>`;
-  switch (task.status) {
-    case 'todo':
-      return btn('claim', '接取') + btn('edit', '编辑');
-    case 'in_progress':
-      return btn('block', '阻碍') + btn('complete', '完成') + btn('recycle', '回收') + btn('edit', '编辑');
-    case 'blocked':
-      return btn('unblock', '解除阻碍') + btn('edit', '编辑');
-    case 'awaiting_confirmation':
-      return btn('archive', '验收通过（归档）') + btn('reject', '退回修改') + btn('edit', '编辑');
-    default:
-      return '';
-  }
+  return (STATUS_ACTIONS[task.status] || [])
+    .map(([action, label]) => `<button data-action="${action}" data-id="${id}">${label}</button>`)
+    .join('');
 }
 
 // ---- Task editor modal ----
@@ -141,6 +145,7 @@ function openEditor(task) {
   editForm.elements.type.value = task.type || '';
   editForm.elements.tags.value = (task.tags || []).join(', ');
   editForm.elements.dueAt.value = toLocalInput(task.dueAt);
+  editForm.elements.status.value = task.status || 'todo';
   editModal.classList.remove('hidden');
 }
 
@@ -161,6 +166,8 @@ editForm.addEventListener('submit', async (ev) => {
     tags: fd.get('tags').split(',').map((s) => s.trim()).filter(Boolean),
     dueAt: fd.get('dueAt') ? new Date(fd.get('dueAt')).toISOString() : '',
   };
+  const status = fd.get('status');
+  if (status !== editingTask.status) payload.status = status;
   try {
     await api(`/api/tasks/${encodeURIComponent(editingTask.id)}`, {
       method: 'PATCH',
@@ -259,11 +266,7 @@ function renderAgentList() {
   for (const agent of agents) {
     const li = document.createElement('li');
     li.className = 'agent-item';
-    const initial = (agent.name || agent.id).trim().charAt(0) || '?';
-    const avatar = agent.avatar
-      ? `<span class="avatar avatar-custom">${esc(agent.avatar)}</span>`
-      : `<span class="avatar" style="background:hsl(${hashHue(agent.id)} 60% 45%)">${esc(initial)}</span>`;
-    li.innerHTML = `${avatar}<span class="agent-name">${esc(agent.name || agent.id)}</span><code>${esc(agent.id)}</code>`;
+    li.innerHTML = `${avatarHtml(agent)}<span class="agent-name">${esc(agent.name || agent.id)}</span><code>${esc(agent.id)}</code>`;
     agentList.appendChild(li);
   }
 }

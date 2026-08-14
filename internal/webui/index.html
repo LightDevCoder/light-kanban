@@ -66,6 +66,15 @@
       <label>类型 <input name="type"></label>
       <label>标签（逗号分隔） <input name="tags"></label>
       <label>截止时间 <input name="dueAt" type="datetime-local"></label>
+      <label>状态（人工纠正用）
+        <select name="status">
+          <option value="todo">待处理</option>
+          <option value="in_progress">处理中</option>
+          <option value="blocked">遇到阻碍</option>
+          <option value="awaiting_confirmation">等你确认</option>
+          <option value="archived">已归档</option>
+        </select>
+      </label>
       <div class="modal-actions">
         <button type="submit">保存</button>
         <button type="button" id="edit-cancel">取消</button>

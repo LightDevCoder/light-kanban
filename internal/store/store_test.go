@@ -276,6 +276,29 @@ func TestClaimSelfRegistersUnknownAgent(t *testing.T) {
 	if a3.Avatar == nil || *a3.Avatar != pre {
 		t.Errorf("avatar = %v, want preserved %q", a3.Avatar, pre)
 	}
+
+	// A recurring agent's display name survives a later claim that omits name.
+	task4, err := s.CreateTask(store.Task{ID: "t4", Title: "T4", WorkspacePath: "w"})
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	if _, err := s.Claim(task4.ID, store.Agent{ID: "recurring", Name: "Recurring Agent"}); err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	task5, err := s.CreateTask(store.Task{ID: "t5", Title: "T5", WorkspacePath: "w"})
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	if _, err := s.Claim(task5.ID, store.Agent{ID: "recurring"}); err != nil {
+		t.Fatalf("Claim without name: %v", err)
+	}
+	a4, err := s.GetAgent("recurring")
+	if err != nil {
+		t.Fatalf("GetAgent: %v", err)
+	}
+	if a4.Name != "Recurring Agent" {
+		t.Errorf("name = %q, want preserved %q (not the id)", a4.Name, "Recurring Agent")
+	}
 }
 
 // Issue 04: block (处理中 → 遇到阻碍), unblock (遇到阻碍 → 处理中) and
@@ -633,5 +656,63 @@ func TestRecycleReturnsToTodo(t *testing.T) {
 
 	if _, err := s.Recycle("missing"); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("Recycle on missing task = %v, want ErrNotFound", err)
+	}
+}
+
+// Issue 06/user story 6: the human can correct a card's status directly.
+// Moving to 待处理 drops the claim; moving to 已归档 records completedAt;
+// leaving 已归档 clears it; unknown statuses are rejected.
+func TestSetStatusManualCorrection(t *testing.T) {
+	s := mustOpen(t, filepath.Join(t.TempDir(), "test.db"))
+
+	task, err := s.CreateTask(store.Task{ID: "t1", Title: "T", WorkspacePath: "w"})
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	if _, err := s.Claim(task.ID, store.Agent{ID: "a1", Name: "Alpha"}); err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+
+	// Human moves a claimed card back to 待处理: the claim is dropped.
+	back, err := s.SetStatus(task.ID, store.StatusTodo)
+	if err != nil {
+		t.Fatalf("SetStatus(todo): %v", err)
+	}
+	if back.Status != store.StatusTodo || back.ClaimedBy != nil {
+		t.Errorf("after SetStatus(todo) = %+v, want todo with no claim", back)
+	}
+
+	// Human moves a card straight to 等你确认 without an agent.
+	awaiting, err := s.SetStatus(task.ID, store.StatusAwaitingConfirmation)
+	if err != nil {
+		t.Fatalf("SetStatus(awaiting): %v", err)
+	}
+	if awaiting.Status != store.StatusAwaitingConfirmation {
+		t.Errorf("status = %q, want awaiting_confirmation", awaiting.Status)
+	}
+
+	// Moving to 已归档 records the completion date.
+	archived, err := s.SetStatus(task.ID, store.StatusArchived)
+	if err != nil {
+		t.Fatalf("SetStatus(archived): %v", err)
+	}
+	if archived.Status != store.StatusArchived || archived.CompletedAt == nil {
+		t.Errorf("archived = %+v, want archived with completedAt", archived)
+	}
+
+	// Leaving 已归档 clears the completion date.
+	reopened, err := s.SetStatus(task.ID, store.StatusInProgress)
+	if err != nil {
+		t.Fatalf("SetStatus(in_progress): %v", err)
+	}
+	if reopened.Status != store.StatusInProgress || reopened.CompletedAt != nil {
+		t.Errorf("reopened = %+v, want in_progress with nil completedAt", reopened)
+	}
+
+	if _, err := s.SetStatus(task.ID, "bogus"); err == nil {
+		t.Error("SetStatus(bogus) should error")
+	}
+	if _, err := s.SetStatus("missing", store.StatusTodo); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("SetStatus(missing) = %v, want ErrNotFound", err)
 	}
 }

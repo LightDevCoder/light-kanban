@@ -19,11 +19,11 @@ import (
 
 // Status tokens.
 const (
-	StatusTodo              = "todo"
-	StatusInProgress        = "in_progress"
-	StatusBlocked           = "blocked"
+	StatusTodo                 = "todo"
+	StatusInProgress           = "in_progress"
+	StatusBlocked              = "blocked"
 	StatusAwaitingConfirmation = "awaiting_confirmation"
-	StatusArchived          = "archived"
+	StatusArchived             = "archived"
 )
 
 // Sentinel errors.
@@ -335,9 +335,6 @@ func timePtr(p *time.Time) any {
 // Claim atomically moves a task 待处理 → 处理中 and self-registers the agent
 // that claims it. Concurrent claims on the same task: exactly one wins.
 func (s *Store) Claim(id string, a Agent) (Task, error) {
-	if a.Name == "" {
-		a.Name = a.ID
-	}
 	tx, err := s.db.Begin()
 	if err != nil {
 		return Task{}, err
@@ -360,10 +357,10 @@ func (s *Store) Claim(id string, a Agent) (Task, error) {
 		return Task{}, ErrConflict
 	}
 
-	_, err = tx.Exec(`INSERT INTO agents (id, name, avatar) VALUES (?, ?, ?)
-		ON CONFLICT(id) DO UPDATE SET name = excluded.name, avatar = COALESCE(excluded.avatar, agents.avatar)`,
-		a.ID, a.Name, strPtr(a.Avatar))
-	if err != nil {
+	// Self-register (or refresh) the agent: a new row defaults its name to
+	// the id; a known agent keeps its display name/avatar when the claim
+	// omits them.
+	if err := upsertAgent(tx, a); err != nil {
 		return Task{}, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -421,6 +418,55 @@ func (s *Store) simpleTransition(id, from, to string, extraSet []string, extraAr
 	return s.GetTask(id)
 }
 
+// SetStatus lets the human correct a card's status directly (user story 6:
+// "manually move or edit a card's status"), bypassing the transition guards.
+// Moving to 待处理 drops the claim; moving to 已归档 records the completion
+// date; leaving 已归档 clears it. Unknown statuses are rejected.
+func (s *Store) SetStatus(id, status string) (Task, error) {
+	switch status {
+	case StatusTodo, StatusInProgress, StatusBlocked, StatusAwaitingConfirmation, StatusArchived:
+	default:
+		return Task{}, fmt.Errorf("invalid status %q", status)
+	}
+	sets := []string{"status = ?", "updated_at = ?"}
+	args := []any{status, formatTime(time.Now().UTC())}
+	if status == StatusTodo {
+		sets = append(sets, "claimed_by = NULL")
+	}
+	if status == StatusArchived {
+		sets = append(sets, "completed_at = ?")
+		args = append(args, formatTime(time.Now().UTC()))
+	} else {
+		sets = append(sets, "completed_at = NULL")
+	}
+	args = append(args, id)
+	res, err := s.db.Exec(`UPDATE tasks SET `+strings.Join(sets, ", ")+` WHERE id = ?`, args...)
+	if err != nil {
+		return Task{}, err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return Task{}, ErrNotFound
+	}
+	return s.GetTask(id)
+}
+
+// upsertAgentSQL inserts or updates an agent's display identity. A new row
+// defaults its name to the id; an existing agent keeps its name and avatar
+// when the incoming values are empty.
+const upsertAgentSQL = `INSERT INTO agents (id, name, avatar) VALUES (?, COALESCE(NULLIF(?, ''), ?), ?)
+	ON CONFLICT(id) DO UPDATE SET
+		name = CASE WHEN ? = '' THEN agents.name ELSE excluded.name END,
+		avatar = COALESCE(excluded.avatar, agents.avatar)`
+
+type execer interface {
+	Exec(query string, args ...any) (sql.Result, error)
+}
+
+func upsertAgent(exec execer, a Agent) error {
+	_, err := exec.Exec(upsertAgentSQL, a.ID, a.Name, a.ID, strPtr(a.Avatar), a.Name)
+	return err
+}
+
 // ListAgents returns all registered agents.
 func (s *Store) ListAgents() ([]Agent, error) {
 	rows, err := s.db.Query(`SELECT id, name, avatar FROM agents ORDER BY name`)
@@ -457,14 +503,10 @@ func (s *Store) GetAgent(id string) (Agent, error) {
 }
 
 // UpsertAgent pre-configures or updates an agent's display identity.
+// A new agent defaults its name to the id; an existing agent keeps its
+// name when the update omits one.
 func (s *Store) UpsertAgent(a Agent) (Agent, error) {
-	if a.Name == "" {
-		a.Name = a.ID
-	}
-	_, err := s.db.Exec(`INSERT INTO agents (id, name, avatar) VALUES (?, ?, ?)
-		ON CONFLICT(id) DO UPDATE SET name = excluded.name, avatar = COALESCE(excluded.avatar, agents.avatar)`,
-		a.ID, a.Name, strPtr(a.Avatar))
-	if err != nil {
+	if err := upsertAgent(s.db, a); err != nil {
 		return Agent{}, err
 	}
 	return s.GetAgent(a.ID)

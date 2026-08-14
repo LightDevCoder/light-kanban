@@ -175,16 +175,11 @@ func handleClaim(s *store.Store) http.HandlerFunc {
 			Name:   strings.TrimSpace(req.Name),
 			Avatar: req.Avatar,
 		})
-		switch {
-		case errors.Is(err, store.ErrNotFound):
-			writeError(w, http.StatusNotFound, "task not found")
-		case errors.Is(err, store.ErrConflict):
-			writeError(w, http.StatusConflict, "task is not 待处理 and cannot be claimed")
-		case err != nil:
-			writeError(w, http.StatusInternalServerError, "claim: "+err.Error())
-		default:
-			writeJSON(w, http.StatusOK, task)
+		if err != nil {
+			writeStoreTransitionError(w, err, "claim")
+			return
 		}
+		writeJSON(w, http.StatusOK, task)
 	}
 }
 
@@ -209,12 +204,14 @@ type patchTaskRequest struct {
 	Type          *string   `json:"type"`
 	Tags          *[]string `json:"tags"`
 	DueAt         *string   `json:"dueAt"`
+	Status        *string   `json:"status"`
 }
 
-// handlePatchTask edits a task's human-editable fields. System fields
-// (status, claimedBy, completedAt, createdAt) can never be changed here;
-// unknown JSON fields are ignored. Empty string clears an optional field,
-// empty dueAt clears the due date, null means "leave unchanged".
+// handlePatchTask edits a task's human-editable fields and may correct its
+// status directly (user story 6 — the human overrides wrong state). System
+// fields (claimedBy, completedAt, createdAt) can never be set here; unknown
+// JSON fields are ignored. Empty string clears an optional field, empty
+// dueAt clears the due date, null means "leave unchanged".
 func handlePatchTask(s *store.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
@@ -256,15 +253,35 @@ func handlePatchTask(s *store.Store) http.HandlerFunc {
 				u.DueAt = &parsed
 			}
 		}
-		task, err := s.UpdateTask(id, u)
-		switch {
-		case errors.Is(err, store.ErrNotFound):
-			writeError(w, http.StatusNotFound, "task not found")
-		case err != nil:
-			writeError(w, http.StatusInternalServerError, "update task: "+err.Error())
-		default:
+		if req.Status != nil {
+			status := strings.TrimSpace(*req.Status)
+			switch status {
+			case store.StatusTodo, store.StatusInProgress, store.StatusBlocked,
+				store.StatusAwaitingConfirmation, store.StatusArchived:
+			default:
+				writeError(w, http.StatusUnprocessableEntity, "invalid status: "+status)
+				return
+			}
+			// Fields first (if any), then the status correction on top.
+			task, err := s.UpdateTask(id, u)
+			if err != nil {
+				writeStoreTransitionError(w, err, "update")
+				return
+			}
+			task, err = s.SetStatus(id, status)
+			if err != nil {
+				writeStoreTransitionError(w, err, "set status")
+				return
+			}
 			writeJSON(w, http.StatusOK, task)
+			return
 		}
+		task, err := s.UpdateTask(id, u)
+		if err != nil {
+			writeStoreTransitionError(w, err, "update")
+			return
+		}
+		writeJSON(w, http.StatusOK, task)
 	}
 }
 
@@ -302,21 +319,32 @@ func handleUpsertAgent(s *store.Store) http.HandlerFunc {
 	}
 }
 
+// writeStoreTransitionError maps store errors onto HTTP responses and
+// reports whether an error was written (false = success, callers continue).
+// Error bodies stay language-neutral per the API contract.
+func writeStoreTransitionError(w http.ResponseWriter, err error, verb string) bool {
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		writeError(w, http.StatusNotFound, "task not found")
+	case errors.Is(err, store.ErrConflict):
+		writeError(w, http.StatusConflict, "task is not in the required status for "+verb)
+	case err != nil:
+		writeError(w, http.StatusInternalServerError, verb+": "+err.Error())
+	default:
+		return false
+	}
+	return true
+}
+
 // transitionHandler maps a store status transition (block/unblock/complete/…)
 // onto HTTP: 200 with the moved task, 409 on wrong status, 404 on missing id.
 func transitionHandler(s *store.Store, action func(id string) (store.Task, error), verb string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		task, err := action(id)
-		switch {
-		case errors.Is(err, store.ErrNotFound):
-			writeError(w, http.StatusNotFound, "task not found")
-		case errors.Is(err, store.ErrConflict):
-			writeError(w, http.StatusConflict, "task is not in the required status for "+verb)
-		case err != nil:
-			writeError(w, http.StatusInternalServerError, verb+": "+err.Error())
-		default:
-			writeJSON(w, http.StatusOK, task)
+		if writeStoreTransitionError(w, err, verb) {
+			return
 		}
+		writeJSON(w, http.StatusOK, task)
 	}
 }

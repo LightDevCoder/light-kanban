@@ -609,6 +609,65 @@ func TestPatchTask(t *testing.T) {
 	}
 }
 
+// Issue 06/user story 6: PATCH can also correct a card's status manually —
+// the human overrides the state machine to fix wrong state.
+func TestPatchStatusManualCorrection(t *testing.T) {
+	ts := newServer(t)
+	id := createTask(t, ts, "Correct me")
+
+	// Straight to 等你确认 without any claim (human override).
+	status, raw := do(t, http.MethodPatch, ts.URL+"/api/tasks/"+id, `{"status":"awaiting_confirmation"}`)
+	if status != http.StatusOK {
+		t.Fatalf("PATCH status = %d, want 200 (body: %s)", status, raw)
+	}
+	task := decodeTask(t, raw)
+	if task["status"] != "awaiting_confirmation" {
+		t.Errorf("status = %v, want awaiting_confirmation", task["status"])
+	}
+
+	// Moving to 已归档 records the completion date and leaves the board.
+	status, raw = do(t, http.MethodPatch, ts.URL+"/api/tasks/"+id, `{"status":"archived"}`)
+	if status != http.StatusOK {
+		t.Fatalf("PATCH to archived status = %d (body: %s)", status, raw)
+	}
+	task = decodeTask(t, raw)
+	if task["status"] != "archived" || task["completedAt"] == nil {
+		t.Errorf("archived task = %s, want archived with completedAt", raw)
+	}
+	_, raw = do(t, http.MethodGet, ts.URL+"/api/tasks", "")
+	var active []map[string]any
+	if err := json.Unmarshal(raw, &active); err != nil {
+		t.Fatal(err)
+	}
+	if len(active) != 0 {
+		t.Errorf("active board = %s, want empty after manual archive", raw)
+	}
+	_, raw = do(t, http.MethodGet, ts.URL+"/api/tasks?status=archived", "")
+	var history []map[string]any
+	if err := json.Unmarshal(raw, &history); err != nil {
+		t.Fatal(err)
+	}
+	if len(history) != 1 || history[0]["id"] != id {
+		t.Errorf("history = %s, want the manually archived task", raw)
+	}
+
+	// Reopen it: back on the board without a completion date.
+	status, raw = do(t, http.MethodPatch, ts.URL+"/api/tasks/"+id, `{"status":"in_progress"}`)
+	if status != http.StatusOK {
+		t.Fatalf("PATCH reopen status = %d (body: %s)", status, raw)
+	}
+	task = decodeTask(t, raw)
+	if task["status"] != "in_progress" || task["completedAt"] != nil {
+		t.Errorf("reopened = %s, want in_progress with null completedAt", raw)
+	}
+
+	// Unknown status token rejected.
+	status, raw = do(t, http.MethodPatch, ts.URL+"/api/tasks/"+id, `{"status":"bogus"}`)
+	if status != http.StatusUnprocessableEntity {
+		t.Errorf("bogus status = %d, want 422 (body: %s)", status, raw)
+	}
+}
+
 // Issue 06: POST /api/agents pre-configures an agent whose identity later
 // claims display; upserting updates the display.
 func TestPreconfigureAgent(t *testing.T) {
