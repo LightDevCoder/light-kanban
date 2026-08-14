@@ -21,22 +21,25 @@ body {
 .connection.ok { color: #22c55e; }
 .connection.bad { color: #ef4444; }
 
-.identity { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #d1d5db; }
-.identity label { display: flex; align-items: center; gap: 6px; }
+.identity {
+  display: flex;
+  gap: 8px;
+  padding: 0 12px 8px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
 .identity input {
-  padding: 4px 8px;
-  border-radius: 5px;
-  border: 1px solid #374151;
-  background: #1f2937;
-  color: #f9fafb;
+  padding: 6px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
   font-size: 13px;
 }
 .identity button {
-  padding: 4px 10px;
+  padding: 6px 12px;
   border: none;
-  border-radius: 5px;
-  background: #374151;
-  color: #f9fafb;
+  border-radius: 6px;
+  background: #2563eb;
+  color: #fff;
   cursor: pointer;
   font-size: 13px;
 }
@@ -106,6 +109,8 @@ body {
   justify-content: center;
   z-index: 50;
 }
+/* Must come after the .modal-backdrop rule: display:none has to win over its flex */
+.modal-backdrop.hidden { display: none; }
 .modal {
   background: #fff;
   border-radius: 10px;
@@ -134,6 +139,51 @@ body {
 }
 .modal-actions button[type="submit"] { background: #2563eb; color: #fff; }
 .modal-actions button[type="button"] { background: #f3f4f6; color: #1f2937; }
+
+.browse-modal { width: min(560px, 92vw); }
+.path-row { display: flex; gap: 6px; }
+.path-row input { flex: 1; }
+.browse-btn {
+  padding: 7px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #f9fafb;
+  color: #374151;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.browse-btn:hover { background: #eef2ff; border-color: #6366f1; }
+.browse-path {
+  font-family: Consolas, monospace;
+  font-size: 13px;
+  background: #f3f4f6;
+  border-radius: 6px;
+  padding: 8px 10px;
+  word-break: break-all;
+}
+.browse-listing {
+  max-height: 300px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 6px;
+}
+.browse-item {
+  text-align: left;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 13px;
+  font-family: Consolas, monospace;
+  cursor: pointer;
+  word-break: break-all;
+}
+.browse-item:hover { background: #eef2ff; }
 
 .history { padding: 16px 20px; }
 .history h2 { margin: 0 0 10px; font-size: 16px; }
@@ -182,6 +232,13 @@ body {
   cursor: pointer;
 }
 .add-row button:hover { background: #1d4ed8; }
+.add-row .browse-btn {
+  background: #f9fafb;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  align-self: center;
+}
+.add-row .browse-btn:hover { background: #eef2ff; border-color: #6366f1; }
 
 .board {
   display: grid;
@@ -204,7 +261,10 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
 }
+.title-left { display: flex; align-items: center; gap: 7px; }
 .column-count {
   font-size: 12px;
   font-weight: 600;
@@ -220,11 +280,24 @@ body {
   min-height: 60px;
 }
 
-/* 列头颜色：待处理=灰, 处理中=黄, 遇到阻碍=红, 等你确认=绿 */
-.column-gray .column-title   { background: #9ca3af; color: #fff; }
-.column-yellow .column-title { background: #eab308; color: #422006; }
-.column-red .column-title    { background: #ef4444; color: #fff; }
-.column-green .column-title  { background: #22c55e; color: #052e16; }
+/* 列状态圆圈图标：待处理=灰空心圆, 处理中=黄(…), 遇到阻碍=红(!), 等你确认=绿(✓) */
+.status-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  flex: none;
+  line-height: 1;
+}
+.status-gray { border: 2px solid #9ca3af; background: transparent; }
+.status-yellow { background: #eab308; color: #422006; }
+.status-red { background: #ef4444; color: #fff; }
+.status-green { background: #22c55e; color: #fff; }
 
 .card {
   background: #fff;

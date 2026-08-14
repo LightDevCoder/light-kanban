@@ -8,6 +8,9 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -35,6 +38,7 @@ func New(s *store.Store, ui fs.FS) http.Handler {
 	})
 	r.Get("/api/agents", handleListAgents(s))
 	r.Post("/api/agents", handleUpsertAgent(s))
+	r.Get("/api/fs/dirs", handleBrowseDirs())
 
 	r.Handle("/*", http.FileServer(http.FS(ui)))
 	return r
@@ -317,6 +321,63 @@ func handleUpsertAgent(s *store.Store) http.HandlerFunc {
 		}
 		writeJSON(w, http.StatusOK, agent)
 	}
+}
+
+// handleBrowseDirs lists the subdirectories of an absolute path, so the
+// human can pick a workspace folder by browsing instead of typing. Only
+// directory names are returned (never file contents); ".." components and
+// relative paths are rejected. Empty path lists platform roots.
+func handleBrowseDirs() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		raw := filepath.FromSlash(strings.TrimSpace(r.URL.Query().Get("path")))
+		if raw == "" {
+			writeJSON(w, http.StatusOK, map[string]any{"path": "", "dirs": platformRoots()})
+			return
+		}
+		if !filepath.IsAbs(raw) {
+			writeError(w, http.StatusBadRequest, "path must be absolute")
+			return
+		}
+		// Check ".." on the raw path: filepath.Clean would swallow it.
+		for _, part := range strings.Split(raw, string(filepath.Separator)) {
+			if part == ".." {
+				writeError(w, http.StatusBadRequest, "path must not contain '..'")
+				return
+			}
+		}
+		clean := filepath.Clean(raw)
+		entries, err := os.ReadDir(clean)
+		if err != nil {
+			if os.IsNotExist(err) {
+				writeError(w, http.StatusNotFound, "path not found")
+				return
+			}
+			writeError(w, http.StatusInternalServerError, "read dir: "+err.Error())
+			return
+		}
+		dirs := []string{}
+		for _, e := range entries {
+			if e.IsDir() {
+				dirs = append(dirs, filepath.Join(clean, e.Name()))
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"path": clean, "dirs": dirs})
+	}
+}
+
+// platformRoots returns the top-level directories to start browsing from.
+func platformRoots() []string {
+	if runtime.GOOS != "windows" {
+		return []string{"/"}
+	}
+	roots := []string{}
+	for c := 'A'; c <= 'Z'; c++ {
+		p := string(c) + `:\`
+		if _, err := os.Stat(p); err == nil {
+			roots = append(roots, p)
+		}
+	}
+	return roots
 }
 
 // writeStoreTransitionError maps store errors onto HTTP responses and

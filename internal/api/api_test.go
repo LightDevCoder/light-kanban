@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -665,6 +667,81 @@ func TestPatchStatusManualCorrection(t *testing.T) {
 	status, raw = do(t, http.MethodPatch, ts.URL+"/api/tasks/"+id, `{"status":"bogus"}`)
 	if status != http.StatusUnprocessableEntity {
 		t.Errorf("bogus status = %d, want 422 (body: %s)", status, raw)
+	}
+}
+
+// Directory browsing for the workspacePath field: GET /api/fs/dirs lists the
+// subdirectories of an absolute path (never file contents, never "..").
+func TestBrowseDirs(t *testing.T) {
+	ts := newServer(t)
+
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "sub-a"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "sub-b", "deep"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "file.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	status, raw := do(t, http.MethodGet, ts.URL+"/api/fs/dirs?path="+url.QueryEscape(root), "")
+	if status != http.StatusOK {
+		t.Fatalf("browse status = %d, want 200 (body: %s)", status, raw)
+	}
+	var res struct {
+		Path string   `json:"path"`
+		Dirs []string `json:"dirs"`
+	}
+	if err := json.Unmarshal(raw, &res); err != nil {
+		t.Fatalf("decode browse: %v (%s)", err, raw)
+	}
+	if filepath.Clean(res.Path) != filepath.Clean(root) {
+		t.Errorf("path = %q, want %q", res.Path, root)
+	}
+	names := map[string]bool{}
+	for _, d := range res.Dirs {
+		names[filepath.Base(d)] = true
+	}
+	if !names["sub-a"] || !names["sub-b"] {
+		t.Errorf("dirs = %v, want sub-a and sub-b", res.Dirs)
+	}
+	if names["file.txt"] || names["deep"] {
+		t.Errorf("dirs = %v, must not contain files or non-direct children", res.Dirs)
+	}
+
+	// Path traversal is rejected (a literal ".." component in the URL).
+	// Note: build it by concatenation — filepath.Join would resolve ".." away.
+	traversal := filepath.Join(root, "sub-b") + string(filepath.Separator) + ".."
+	status, raw = do(t, http.MethodGet, ts.URL+"/api/fs/dirs?path="+url.QueryEscape(traversal), "")
+	if status != http.StatusBadRequest {
+		t.Errorf("traversal status = %d, want 400 (body: %s)", status, raw)
+	}
+
+	// Nonexistent path is a not-found; relative paths are rejected.
+	status, _ = do(t, http.MethodGet, ts.URL+"/api/fs/dirs?path="+url.QueryEscape(filepath.Join(root, "nope")), "")
+	if status != http.StatusNotFound {
+		t.Errorf("missing path status = %d, want 404", status)
+	}
+	status, _ = do(t, http.MethodGet, ts.URL+"/api/fs/dirs?path=relative%2Fdir", "")
+	if status != http.StatusBadRequest {
+		t.Errorf("relative path status = %d, want 400", status)
+	}
+
+	// Empty path lists platform roots (drives on Windows, / elsewhere).
+	status, raw = do(t, http.MethodGet, ts.URL+"/api/fs/dirs", "")
+	if status != http.StatusOK {
+		t.Fatalf("browse roots status = %d, want 200 (body: %s)", status, raw)
+	}
+	if err := json.Unmarshal(raw, &res); err != nil {
+		t.Fatalf("decode roots: %v (%s)", err, raw)
+	}
+	if res.Path != "" {
+		t.Errorf("roots path = %q, want empty", res.Path)
+	}
+	if len(res.Dirs) == 0 {
+		t.Error("roots dirs should not be empty on any platform")
 	}
 }
 

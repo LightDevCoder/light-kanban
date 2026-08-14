@@ -11,14 +11,6 @@
     <h1>Light-Kanban 任务看板</h1>
     <div class="topbar-right">
       <button id="history-toggle" class="ghost-btn" type="button">归档历史</button>
-      <form id="identity-form" class="identity" autocomplete="off">
-        <label>我是 agent：
-          <input name="agentId" placeholder="agentId *" size="10" required>
-          <input name="name" placeholder="名称" size="8">
-          <input name="avatar" placeholder="头像（emoji）" size="4">
-        </label>
-        <button type="submit" title="保存身份到本地">保存</button>
-      </form>
       <span id="connection" class="connection ok" title="连接状态">●</span>
     </div>
   </header>
@@ -27,10 +19,11 @@
     <form id="add-form" autocomplete="off">
       <div class="add-row">
         <input name="title" placeholder="任务标题 *" required>
-        <input name="workspacePath" placeholder="workspace 文件夹路径 *" required>
-        <input name="type" placeholder="类型（可选）">
-        <input name="tags" placeholder="标签，逗号分隔（可选）">
-        <input name="dueAt" type="datetime-local" title="截止时间（可选）">
+        <input name="workspacePath" placeholder="workspace 文件夹路径 *（可浏览选择）" required>
+        <button type="button" class="browse-btn" data-browse-target="add" title="浏览服务器上的文件夹">浏览…</button>
+        <input name="type" placeholder="类型：单个，如 feature / bug / docs（可选）">
+        <input name="tags" placeholder="标签：逗号分隔多个（可选）">
+        <input name="dueAt" type="datetime-local" title="截止时间（可选，留空表示无截止）">
         <button type="submit">添加任务</button>
       </div>
       <textarea name="description" rows="2" placeholder="描述 / 指令正文（可选）"></textarea>
@@ -39,9 +32,15 @@
 
   <section class="agents-panel">
     <details id="agents-details">
-      <summary>Agent 管理</summary>
+      <summary>Agent 管理（预配置 / 以 agent 身份操作时填写）</summary>
+      <form id="identity-form" class="identity" autocomplete="off">
+        <input name="agentId" placeholder="agentId *（接取任务时用）" required>
+        <input name="name" placeholder="名称">
+        <input name="avatar" placeholder="头像（emoji）">
+        <button type="submit">保存身份</button>
+      </form>
       <form id="agent-form" class="agent-form" autocomplete="off">
-        <input name="id" placeholder="agent id *" required>
+        <input name="id" placeholder="预配置 agent id *" required>
         <input name="name" placeholder="名称">
         <input name="avatar" placeholder="头像（emoji）">
         <button type="submit">预配置 / 更新</button>
@@ -61,11 +60,16 @@
     <form id="edit-form" class="modal" autocomplete="off">
       <h3>编辑任务</h3>
       <label>标题 <input name="title" required></label>
-      <label>workspace 文件夹 <input name="workspacePath" required></label>
+      <label>workspace 文件夹
+        <span class="path-row">
+          <input name="workspacePath" required>
+          <button type="button" class="browse-btn" data-browse-target="edit" title="浏览服务器上的文件夹">浏览…</button>
+        </span>
+      </label>
       <label>描述 / 指令正文 <textarea name="description" rows="3"></textarea></label>
-      <label>类型 <input name="type"></label>
-      <label>标签（逗号分隔） <input name="tags"></label>
-      <label>截止时间 <input name="dueAt" type="datetime-local"></label>
+      <label>类型（单个，如 feature / bug / docs） <input name="type"></label>
+      <label>标签（逗号分隔多个） <input name="tags"></label>
+      <label>截止时间（留空表示无截止） <input name="dueAt" type="datetime-local"></label>
       <label>状态（人工纠正用）
         <select name="status">
           <option value="todo">待处理</option>
@@ -80,6 +84,19 @@
         <button type="button" id="edit-cancel">取消</button>
       </div>
     </form>
+  </div>
+
+  <div id="browse-modal" class="modal-backdrop hidden">
+    <div class="modal browse-modal">
+      <h3>选择 workspace 文件夹</h3>
+      <div id="browse-path" class="browse-path" title="">/</div>
+      <div id="browse-listing" class="browse-listing"></div>
+      <div class="modal-actions">
+        <button type="button" id="browse-up">上级</button>
+        <button type="button" id="browse-select">选择此文件夹</button>
+        <button type="button" id="browse-cancel">取消</button>
+      </div>
+    </div>
   </div>
 
   <script src="/app.js"></script>

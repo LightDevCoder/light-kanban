@@ -7,10 +7,10 @@ const REFRESH_MS = 5000;
 const STUCK_THRESHOLD_MS = 24 * 60 * 60 * 1000;
 
 const COLUMNS = [
-  { status: 'todo', title: '待处理', color: 'gray' },
-  { status: 'in_progress', title: '处理中', color: 'yellow' },
-  { status: 'blocked', title: '遇到阻碍', color: 'red' },
-  { status: 'awaiting_confirmation', title: '等你确认', color: 'green' },
+  { status: 'todo', title: '待处理', color: 'gray', icon: '' },
+  { status: 'in_progress', title: '处理中', color: 'yellow', icon: '…' },
+  { status: 'blocked', title: '遇到阻碍', color: 'red', icon: '!' },
+  { status: 'awaiting_confirmation', title: '等你确认', color: 'green', icon: '✓' },
 ];
 
 const boardEl = document.getElementById('board');
@@ -196,7 +196,10 @@ function render() {
     const section = document.createElement('section');
     section.className = 'column column-' + col.color;
     section.innerHTML = `
-      <h2 class="column-title">${col.title} <span class="column-count">${colTasks.length}</span></h2>
+      <h2 class="column-title">
+        <span class="title-left"><span class="status-icon status-${col.color}">${col.icon}</span>${col.title}</span>
+        <span class="column-count">${colTasks.length}</span>
+      </h2>
       <div class="column-body"></div>`;
     const body = section.querySelector('.column-body');
     for (const task of colTasks) {
@@ -239,7 +242,8 @@ async function performAction(action, id) {
   if (action === 'claim') {
     const me = identity();
     if (!me.agentId) {
-      alert('请先在顶部填写 agentId 并保存身份。');
+      alert('请先在「Agent 管理」面板里填写 agentId 并保存身份（agent 通常通过 API 接取，不需要网页）。');
+      document.getElementById('agents-details').open = true;
       return;
     }
     const payload = { agentId: me.agentId };
@@ -258,6 +262,74 @@ async function performAction(action, id) {
   }
   if (action !== 'edit') await refresh();
 }
+
+// ---- workspace 文件夹目录浏览 ----
+
+const browseModal = document.getElementById('browse-modal');
+const browsePathEl = document.getElementById('browse-path');
+const browseListing = document.getElementById('browse-listing');
+let browseCtx = { input: null, path: '' };
+
+function openBrowser(input) {
+  browseCtx.input = input;
+  browseModal.classList.remove('hidden');
+  loadBrowse('');
+}
+
+async function loadBrowse(path) {
+  try {
+    const res = await api('/api/fs/dirs?path=' + encodeURIComponent(path));
+    browseCtx.path = res.path;
+    browsePathEl.textContent = res.path || '（磁盘根目录，点下方盘符进入）';
+    browsePathEl.title = res.path;
+    browseListing.replaceChildren();
+    if (!res.dirs.length) {
+      browseListing.innerHTML = '<p class="history-empty">这个文件夹下没有子文件夹</p>';
+      return;
+    }
+    for (const dir of res.dirs) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'browse-item';
+      btn.textContent = dir;
+      btn.title = dir;
+      btn.addEventListener('click', () => loadBrowse(dir));
+      browseListing.appendChild(btn);
+    }
+  } catch (err) {
+    alert('浏览失败：' + err.message);
+  }
+}
+
+// Parent of an absolute path ('' = show roots). Handles C:\ and / style paths.
+function parentOf(path) {
+  if (!path) return '';
+  const parts = path.replace(/\\/g, '/').split('/').filter(Boolean);
+  parts.pop();
+  if (!parts.length) return '';
+  if (/^[A-Za-z]:$/.test(parts[0])) return parts[0] + ':\\';
+  return '/' + parts.join('/');
+}
+
+document.getElementById('browse-up').addEventListener('click', () => loadBrowse(parentOf(browseCtx.path)));
+document.getElementById('browse-select').addEventListener('click', () => {
+  if (browseCtx.input) browseCtx.input.value = browseCtx.path;
+  browseModal.classList.add('hidden');
+});
+document.getElementById('browse-cancel').addEventListener('click', () => browseModal.classList.add('hidden'));
+browseModal.addEventListener('click', (ev) => {
+  if (ev.target === browseModal) browseModal.classList.add('hidden');
+});
+
+document.querySelectorAll('[data-browse-target]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const target = btn.dataset.browseTarget;
+    const input = target === 'edit'
+      ? editForm.elements.workspacePath
+      : document.querySelector('#add-form input[name="workspacePath"]');
+    openBrowser(input);
+  });
+});
 
 // ---- Agents panel ----
 
