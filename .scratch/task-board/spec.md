@@ -88,13 +88,14 @@ Status: ready-for-agent
   | --- | --- |
   | `GET /api/tasks?status=<s>` | list tasks; default active; `status=archived` for history |
   | `POST /api/tasks` | create a task (human) |
-  | `PATCH /api/tasks/:id` | edit title/description/workspacePath/type/tags/dueAt (human) |
+  | `PATCH /api/tasks/:id` | edit title/description/workspacePath/type/tags/dueAt, and manually correct `status` (human; user story 6) |
   | `POST /api/tasks/:id/claim` | 待处理 → 处理中; body `{agentId, name?, avatar?}` |
   | `POST /api/tasks/:id/block` | 处理中 → 遇到阻碍 |
   | `POST /api/tasks/:id/unblock` | 遇到阻碍 → 处理中 |
   | `POST /api/tasks/:id/complete` | 处理中 → 等你确认 |
   | `POST /api/tasks/:id/archive` | 等你确认 → 已归档 (验收通过后) |
   | `POST /api/tasks/:id/reject` | 等你确认 → 处理中 (验收不通过) |
+  | `POST /api/tasks/:id/recycle` | 处理中 → 待处理, drops the claim (human; orphan reclaim, issue 07) |
   | `GET /api/agents` | list agents |
   | `POST /api/agents` | pre-configure an agent (human) |
 
