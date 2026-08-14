@@ -10,6 +10,9 @@ dist/
 *.db-shm
 *.db-wal
 
+# Runtime data (uploaded agent avatars, default -avatars dir)
+avatars/
+
 # Editor/OS noise
 .DS_Store
 Thumbs.db

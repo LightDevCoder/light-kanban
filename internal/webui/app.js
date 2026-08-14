@@ -1,4 +1,4 @@
-// Light-Kanban board UI — vanilla JS, polling refresh.
+// Light-Kanban board UI — vanilla JS, polling refresh, zh/en i18n.
 'use strict';
 
 const REFRESH_MS = 5000;
@@ -6,18 +6,222 @@ const REFRESH_MS = 5000;
 // A 处理中 task untouched for longer than this is flagged "suspected stuck".
 const STUCK_THRESHOLD_MS = 24 * 60 * 60 * 1000;
 
+// ---- i18n ----
+
+const I18N = {
+  zh: {
+    docTitle: 'Light-Kanban 任务看板',
+    'topbar.add': '＋ 添加任务',
+    'topbar.wizard': '使用向导',
+    'topbar.wizardTitle': '重新打开使用引导',
+    'topbar.history': '归档历史',
+    'topbar.historyTitle': '打开已归档任务列表',
+    'topbar.langTitle': '切换语言',
+    'conn.ok': '已连接',
+    'conn.bad': '连接失败',
+    'col.todo': '待处理',
+    'col.in_progress': '处理中',
+    'col.blocked': '遇到阻碍',
+    'col.awaiting_confirmation': '等你确认',
+    'act.claim': '接取',
+    'act.edit': '编辑',
+    'act.delete': '删除',
+    'act.archive': '验收通过（归档）',
+    'card.openFolder': '打开项目文件夹',
+    'card.workspace': 'workspace 文件夹',
+    'card.due': '截止',
+    'card.stuck': '疑似卡住',
+    'card.stuckTitle': '超过 {h} 小时未更新',
+    'add.title': '添加任务',
+    'add.titleField': '标题',
+    'add.workspaceField': 'workspace 文件夹',
+    'add.descField': '描述 / 指令正文',
+    'add.tagsField': '标签（逗号分隔多个，如 go, ui）',
+    'add.dueField': '截止时间（留空表示无截止）',
+    'add.phTitle': '要让 agent 做什么',
+    'add.phWorkspace': '任务对应的项目文件夹路径',
+    'add.phDesc': '给 agent 的指令正文（可选）',
+    'add.phTags': 'go, ui',
+    'add.submit': '添加',
+    'edit.title': '编辑任务',
+    'edit.titleField': '标题',
+    'edit.workspaceField': 'workspace 文件夹',
+    'edit.descField': '描述 / 指令正文',
+    'edit.tagsField': '标签（逗号分隔多个）',
+    'edit.dueField': '截止时间（留空表示无截止）',
+    'edit.statusField': '状态（人工纠正用）',
+    'edit.submit': '保存',
+    'status.todo': '待处理',
+    'status.in_progress': '处理中',
+    'status.blocked': '遇到阻碍',
+    'status.awaiting_confirmation': '等你确认',
+    'status.archived': '已归档',
+    'common.cancel': '取消',
+    'archive.title': '已归档历史',
+    'archive.count': '共 {n} 条',
+    'archive.selectAll': '全选',
+    'archive.deleteSelected': '删除选中',
+    'archive.close': '关闭',
+    'archive.empty': '还没有已归档的任务。',
+    'archive.checkTitle': '选择此任务',
+    'archive.completedAt': '完成于',
+    'archive.delete': '删除',
+    'archive.deleteOneConfirm': '确定删除该条历史记录？此操作不可恢复。',
+    'archive.deleteManyConfirm': '确定删除选中的 {n} 条历史记录？此操作不可恢复。',
+    'browse.title': '选择 workspace 文件夹',
+    'browse.browse': '浏览…',
+    'browse.browseTitle': '在页面里浏览服务器文件夹',
+    'browse.pick': '系统选择…',
+    'browse.pickTitle': '调起服务器所在电脑的系统文件夹对话框',
+    'browse.up': '上级',
+    'browse.select': '选择此文件夹',
+    'browse.empty': '这个文件夹下没有子文件夹',
+    'browse.root': '（根目录，点击下方路径进入）',
+    'wizard.welcome': '欢迎使用 Light-Kanban 任务看板',
+    'wizard.skip': '跳过',
+    'wizard.prev': '上一步',
+    'wizard.next': '下一步',
+    'wizard.finish': '开始使用',
+    'wizard.step1': '<h4>① 添加任务</h4><p>点右上角「＋ 添加任务」，在弹窗里填写：</p><ul><li><b>标题</b>：要让 agent 做什么</li><li><b>workspace 文件夹</b>：该任务的项目文件夹路径（可「浏览…」或「系统选择…」）</li><li>可选：描述 / 标签 / 截止时间</li></ul><p>添加后任务出现在<b>待处理</b>列，agent 就可以接取了。</p>',
+    'wizard.step2': '<h4>② Agent 接取（agent 自己做）</h4><p>告诉你的 agent 通过 API 自己注册并接取：</p><pre><code>GET  /api/tasks                     # 找到任务和它的 id\nPOST /api/avatars                   # 上传头像图片（multipart file）\nPOST /api/tasks/&lt;id&gt;/claim      # body: {"agentId","name","avatar"}</code></pre><p>接取约束：<code>name</code> 用工具名，<code>avatar</code> 必须是真实图片（上传的路径或 http(s) 图片 URL），伪造路径会被 422 拒绝。接取后卡片显示 agent 的头像和名称。</p>',
+    'wizard.step3': '<h4>③ 干活与状态流转（agent 通过 API）</h4><p>agent 干活时通过 API 更新状态，你只需要看四列：</p><ul><li><code>POST /api/tasks/&lt;id&gt;/block</code> — 遇到阻碍 → <b>遇到阻碍</b>列</li><li><code>POST /api/tasks/&lt;id&gt;/unblock</code> — 解除阻碍 → <b>处理中</b>列</li><li><code>POST /api/tasks/&lt;id&gt;/complete</code> — 干完交回 → <b>等你确认</b>列</li></ul>',
+    'wizard.step4': '<h4>④ 验收与归档</h4><p>任务到「等你确认」后由你验收：</p><ul><li>通过 → 点卡片上的「验收通过（归档）」，任务进入<b>归档历史</b>（右上「归档历史」弹窗，可单条 / 全选删除）</li><li>不通过 → 直接命令 agent 修改，它自己调 API 把任务退回<b>处理中</b></li></ul>',
+    'alert.claimNoIdentity': '本浏览器没有保存 agent 身份：agent 应通过 API 接取（POST /api/tasks/:id/claim，携带 agentId/name/avatar）。',
+    'alert.deleteTaskConfirm': '确定删除该任务？此操作不可恢复（归档历史里也会消失）。',
+    'alert.addFailed': '添加任务失败：{e}',
+    'alert.saveFailed': '保存失败：{e}',
+    'alert.opFailed': '操作失败：{e}',
+    'alert.historyLoadFailed': '加载历史失败：{e}',
+    'alert.deleteFailed': '删除失败：{e}',
+    'alert.browseFailed': '浏览失败：{e}',
+    'alert.pickFailed': '系统选择失败：{e}',
+  },
+  en: {
+    docTitle: 'Light-Kanban Task Board',
+    'topbar.add': '+ Add Task',
+    'topbar.wizard': 'Guide',
+    'topbar.wizardTitle': 'Reopen the onboarding guide',
+    'topbar.history': 'Archive',
+    'topbar.historyTitle': 'Open archived tasks',
+    'topbar.langTitle': 'Switch language',
+    'conn.ok': 'Connected',
+    'conn.bad': 'Connection lost',
+    'col.todo': 'To Do',
+    'col.in_progress': 'In Progress',
+    'col.blocked': 'Blocked',
+    'col.awaiting_confirmation': 'Awaiting Confirmation',
+    'act.claim': 'Claim',
+    'act.edit': 'Edit',
+    'act.delete': 'Delete',
+    'act.archive': 'Accept & Archive',
+    'card.openFolder': 'Open project folder',
+    'card.workspace': 'workspace folder',
+    'card.due': 'Due',
+    'card.stuck': 'Suspected stuck',
+    'card.stuckTitle': 'not updated for {h}+ hours',
+    'add.title': 'Add Task',
+    'add.titleField': 'Title',
+    'add.workspaceField': 'Workspace folder',
+    'add.descField': 'Description / Instructions',
+    'add.tagsField': 'Tags (comma-separated, e.g. go, ui)',
+    'add.dueField': 'Due date (empty = none)',
+    'add.phTitle': 'What should the agent do',
+    'add.phWorkspace': 'Path of the project folder for this task',
+    'add.phDesc': 'Instructions for the agent (optional)',
+    'add.phTags': 'go, ui',
+    'add.submit': 'Add',
+    'edit.title': 'Edit Task',
+    'edit.titleField': 'Title',
+    'edit.workspaceField': 'Workspace folder',
+    'edit.descField': 'Description / Instructions',
+    'edit.tagsField': 'Tags (comma-separated)',
+    'edit.dueField': 'Due date (empty = none)',
+    'edit.statusField': 'Status (manual correction)',
+    'edit.submit': 'Save',
+    'status.todo': 'To Do',
+    'status.in_progress': 'In Progress',
+    'status.blocked': 'Blocked',
+    'status.awaiting_confirmation': 'Awaiting Confirmation',
+    'status.archived': 'Archived',
+    'common.cancel': 'Cancel',
+    'archive.title': 'Archive History',
+    'archive.count': '{n} item(s)',
+    'archive.selectAll': 'Select all',
+    'archive.deleteSelected': 'Delete selected',
+    'archive.close': 'Close',
+    'archive.empty': 'No archived tasks yet.',
+    'archive.checkTitle': 'Select this task',
+    'archive.completedAt': 'Completed',
+    'archive.delete': 'Delete',
+    'archive.deleteOneConfirm': 'Delete this history entry? This cannot be undone.',
+    'archive.deleteManyConfirm': 'Delete the {n} selected history entries? This cannot be undone.',
+    'browse.title': 'Choose a workspace folder',
+    'browse.browse': 'Browse…',
+    'browse.browseTitle': 'Browse folders on the server in this page',
+    'browse.pick': 'System picker…',
+    'browse.pickTitle': 'Open the system folder dialog on the server machine',
+    'browse.up': 'Up',
+    'browse.select': 'Choose this folder',
+    'browse.empty': 'This folder has no subfolders',
+    'browse.root': '(root — pick a folder below)',
+    'wizard.welcome': 'Welcome to Light-Kanban',
+    'wizard.skip': 'Skip',
+    'wizard.prev': 'Back',
+    'wizard.next': 'Next',
+    'wizard.finish': 'Get started',
+    'wizard.step1': '<h4>① Add a task</h4><p>Click "<b>+ Add Task</b>" in the top bar and fill in:</p><ul><li><b>Title</b>: what the agent should do</li><li><b>Workspace folder</b>: the project folder for this task (browse in-page or use the system picker)</li><li>Optional: description / tags / due date</li></ul><p>The task lands in the <b>To Do</b> column, ready for an agent to claim.</p>',
+    'wizard.step2': '<h4>② An agent claims it (the agent does this)</h4><p>Tell your agent to self-register and claim via the API:</p><pre><code>GET  /api/tasks                     # find the task and its id\nPOST /api/avatars                   # upload an avatar image (multipart file)\nPOST /api/tasks/&lt;id&gt;/claim      # body: {"agentId","name","avatar"}</code></pre><p>Claim constraints: <code>name</code> is your tool name; <code>avatar</code> must be a real image (an uploaded path or an http(s) image URL) — fabricated paths get a 422. The card then shows the agent&apos;s avatar and name.</p>',
+    'wizard.step3': '<h4>③ Work and status transitions (agent, via API)</h4><p>The agent updates status through the API; you just watch the four columns:</p><ul><li><code>POST /api/tasks/&lt;id&gt;/block</code> — blocked → <b>Blocked</b> column</li><li><code>POST /api/tasks/&lt;id&gt;/unblock</code> — unblocked → <b>In Progress</b> column</li><li><code>POST /api/tasks/&lt;id&gt;/complete</code> — finished → <b>Awaiting Confirmation</b> column</li></ul>',
+    'wizard.step4': '<h4>④ Review and archive</h4><p>When a task reaches "Awaiting Confirmation", you review it:</p><ul><li>Accept → click "<b>Accept &amp; Archive</b>" on the card; it moves to the <b>Archive</b> modal (top bar; supports single and select-all delete)</li><li>Not good enough → just tell the agent to fix it; the agent moves the task back to <b>In Progress</b> via the API</li></ul>',
+    'alert.claimNoIdentity': 'No agent identity saved in this browser: agents claim via the API (POST /api/tasks/:id/claim with agentId/name/avatar).',
+    'alert.deleteTaskConfirm': 'Delete this task? This cannot be undone (it will also disappear from the archive).',
+    'alert.addFailed': 'Failed to add task: {e}',
+    'alert.saveFailed': 'Failed to save: {e}',
+    'alert.opFailed': 'Operation failed: {e}',
+    'alert.historyLoadFailed': 'Failed to load history: {e}',
+    'alert.deleteFailed': 'Failed to delete: {e}',
+    'alert.browseFailed': 'Browse failed: {e}',
+    'alert.pickFailed': 'System picker failed: {e}',
+  },
+};
+
+let lang = localStorage.getItem('lk-lang') ||
+  (String(navigator.language || '').toLowerCase().startsWith('zh') ? 'zh' : 'en');
+
+function t(key) {
+  return (I18N[lang] && I18N[lang][key]) || I18N.zh[key] || key;
+}
+
+function tpl(key, vars) {
+  let s = t(key);
+  for (const k in vars) s = s.replaceAll('{' + k + '}', String(vars[k]));
+  return s;
+}
+
 const COLUMNS = [
-  { status: 'todo', title: '待处理', color: 'gray', icon: '' },
-  { status: 'in_progress', title: '处理中', color: 'yellow', icon: '…' },
-  { status: 'blocked', title: '遇到阻碍', color: 'red', icon: '!' },
-  { status: 'awaiting_confirmation', title: '等你确认', color: 'green', icon: '✓' },
+  { status: 'todo', color: 'gray', icon: '' },
+  { status: 'in_progress', color: 'yellow', icon: '…' },
+  { status: 'blocked', color: 'red', icon: '!' },
+  { status: 'awaiting_confirmation', color: 'green', icon: '✓' },
 ];
+
+// Status → available actions (label keys into I18N), shared by every card render.
+// 状态流转（接取/阻碍/解除阻碍/完成/回收/退回）是 agent 通过 API 做的动作，
+// 界面只保留人类的真实操作：每列都有 编辑/删除，「等你确认」另有「验收通过（归档）」。
+const STATUS_ACTIONS = {
+  todo: [['claim', 'act.claim'], ['edit', 'act.edit'], ['delete', 'act.delete']],
+  in_progress: [['edit', 'act.edit'], ['delete', 'act.delete']],
+  blocked: [['edit', 'act.edit'], ['delete', 'act.delete']],
+  awaiting_confirmation: [['archive', 'act.archive'], ['edit', 'act.edit'], ['delete', 'act.delete']],
+};
 
 const boardEl = document.getElementById('board');
 const connectionEl = document.getElementById('connection');
+const langToggle = document.getElementById('lang-toggle');
 
 let tasks = [];
 let agents = [];
+let connected = true;
 
 async function api(path, options) {
   const resp = await fetch(path, options);
@@ -30,8 +234,9 @@ async function api(path, options) {
 }
 
 function setConnection(ok) {
+  connected = ok;
   connectionEl.className = 'connection ' + (ok ? 'ok' : 'bad');
-  connectionEl.title = ok ? '已连接' : '连接失败';
+  connectionEl.title = ok ? t('conn.ok') : t('conn.bad');
 }
 
 async function refresh() {
@@ -54,7 +259,7 @@ function fmtTime(iso) {
   if (!iso) return '';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleString();
+  return d.toLocaleString(lang === 'zh' ? 'zh-CN' : 'en-US');
 }
 
 function hashHue(s) {
@@ -78,16 +283,14 @@ function avatarHtml(agent) {
   const initial = (agent.name || id).trim().charAt(0) || '?';
   if (agent.avatar) {
     if (isImageAvatar(agent.avatar)) {
-      return `<img class="avatar avatar-img" src="${esc(agent.avatar)}" alt="头像" title="${esc(agent.name || id)}">`;
+      return `<img class="avatar avatar-img" src="${esc(agent.avatar)}" alt="avatar" title="${esc(agent.name || id)}">`;
     }
     return `<span class="avatar avatar-custom">${esc(agent.avatar)}</span>`;
   }
   return `<span class="avatar" style="background:hsl(${hashHue(id)} 60% 45%)">${esc(initial)}</span>`;
 }
 
-// 卡片上的 agent 身份：头像 + 名称。agentId 只存在于 API 层（接取/归属用），
-// 界面不显示——名称与 id 相同时显示 id 毫无意义，只有在需要区分同名 agent
-// 的不同 session 时才需要 id，而那是 API 层的事。
+// 卡片上的 agent 身份：头像 + 名称。agentId 只存在于 API 层（接取/归属用），界面不显示。
 function agentChip(task) {
   if (!task.claimedBy) return '';
   const agent = agentById(task.claimedBy) || { id: task.claimedBy, name: task.claimedBy };
@@ -102,44 +305,36 @@ function isSuspectedStuck(task) {
 }
 
 function tagsHtml(tags) {
-  return (tags || []).map((t) => `<span class="tag">${esc(t)}</span>`).join('');
+  return (tags || []).map((x) => `<span class="tag">${esc(x)}</span>`).join('');
 }
 
 function cardHtml(task) {
   const meta = [];
-  if (task.dueAt) meta.push(`<span class="chip chip-due">截止 ${esc(fmtTime(task.dueAt))}</span>`);
+  if (task.dueAt) meta.push(`<span class="chip chip-due">${esc(t('card.due'))} ${esc(fmtTime(task.dueAt))}</span>`);
   const stuck = isSuspectedStuck(task);
-  const stuckBadge = stuck ? '<span class="stuck-badge" title="超过 ' + Math.round(STUCK_THRESHOLD_MS / 3600000) + ' 小时未更新">疑似卡住</span>' : '';
+  const hours = Math.round(STUCK_THRESHOLD_MS / 3600000);
+  const stuckBadge = stuck
+    ? `<span class="stuck-badge" title="${esc(tpl('card.stuckTitle', { h: hours }))}">${esc(t('card.stuck'))}</span>`
+    : '';
   return `
     <article class="card ${stuck ? 'card-stuck' : ''}" data-id="${esc(task.id)}">
       <h3 class="card-title">${esc(task.title)} ${stuckBadge}
-        <button class="icon-btn" data-action="open-folder" data-id="${esc(task.id)}" title="打开项目文件夹">📁</button>
+        <button class="icon-btn" data-action="open-folder" data-id="${esc(task.id)}" title="${esc(t('card.openFolder'))}">📁</button>
         ${agentChip(task)}
       </h3>
-      <div class="card-path" title="workspace 文件夹">${esc(task.workspacePath)}</div>
+      <div class="card-path" title="${esc(t('card.workspace'))}">${esc(task.workspacePath)}</div>
       ${task.description ? `<p class="card-desc">${esc(task.description)}</p>` : ''}
       <div class="card-meta">${meta.join('')}${tagsHtml(task.tags)}</div>
       <div class="card-actions">${actionsFor(task)}</div>
     </article>`;
 }
 
-// Status → available actions, shared by every card render.
-// 状态流转（接取/阻碍/解除阻碍/完成/回收/退回）是 agent 通过 API 做的动作，
-// 界面只保留人类的真实操作：每列都有 编辑/删除，「等你确认」另有「验收通过（归档）」；
-// 人工纠正状态走「编辑 → 状态」。
-const STATUS_ACTIONS = {
-  todo: [['claim', '接取'], ['edit', '编辑'], ['delete', '删除']],
-  in_progress: [['edit', '编辑'], ['delete', '删除']],
-  blocked: [['edit', '编辑'], ['delete', '删除']],
-  awaiting_confirmation: [['archive', '验收通过（归档）'], ['edit', '编辑'], ['delete', '删除']],
-};
-
 function actionsFor(task) {
   const id = esc(task.id);
   return (STATUS_ACTIONS[task.status] || [])
     // 接取是 agent 通过 API 做的动作：只有本浏览器保存过 agent 身份才显示按钮
     .filter(([action]) => action !== 'claim' || Boolean(identity().agentId))
-    .map(([action, label]) => `<button data-action="${action}" data-id="${id}">${label}</button>`)
+    .map(([action, labelKey]) => `<button data-action="${action}" data-id="${id}">${esc(t(labelKey))}</button>`)
     .join('');
 }
 
@@ -186,7 +381,7 @@ addForm.addEventListener('submit', async (ev) => {
     closeAdd();
     await refresh();
   } catch (err) {
-    alert('添加任务失败：' + err.message);
+    alert(tpl('alert.addFailed', { e: err.message }));
   }
 });
 
@@ -241,7 +436,7 @@ editForm.addEventListener('submit', async (ev) => {
     closeEditor();
     await refresh();
   } catch (err) {
-    alert('保存失败：' + err.message);
+    alert(tpl('alert.saveFailed', { e: err.message }));
   }
 });
 
@@ -253,12 +448,12 @@ editModal.addEventListener('click', (ev) => {
 function render() {
   const frag = document.createDocumentFragment();
   for (const col of COLUMNS) {
-    const colTasks = tasks.filter((t) => t.status === col.status);
+    const colTasks = tasks.filter((x) => x.status === col.status);
     const section = document.createElement('section');
     section.className = 'column column-' + col.color;
     section.innerHTML = `
       <h2 class="column-title">
-        <span class="title-left"><span class="status-icon status-${col.color}">${col.icon}</span>${col.title}</span>
+        <span class="title-left"><span class="status-icon status-${col.color}">${col.icon}</span>${esc(t('col.' + col.status))}</span>
         <span class="column-count">${colTasks.length}</span>
       </h2>
       <div class="column-body"></div>`;
@@ -274,8 +469,6 @@ function render() {
 }
 
 // ---- Agent identity (saved locally; agents normally claim via the API) ----
-// 注册是 agent 自己的事，网页不提供注册表单：卡片上会直接显示 agent
-// 注册时提供的信息（头像 + 名称）。本浏览器保存过身份时，「接取」按钮才会出现。
 
 let savedIdentity = loadIdentity();
 
@@ -296,7 +489,7 @@ async function performAction(action, id) {
   if (action === 'claim') {
     const me = identity();
     if (!me.agentId) {
-      alert('本浏览器没有保存 agent 身份：agent 应通过 API 接取（POST /api/tasks/:id/claim，携带 agentId/name/avatar）。');
+      alert(t('alert.claimNoIdentity'));
       return;
     }
     const payload = { agentId: me.agentId };
@@ -310,10 +503,10 @@ async function performAction(action, id) {
   } else if (['block', 'unblock', 'complete', 'archive', 'reject', 'recycle'].includes(action)) {
     await api(`/api/tasks/${idEnc}/${action}`, { method: 'POST' });
   } else if (action === 'delete') {
-    if (!confirm('确定删除该任务？此操作不可恢复（归档历史里也会消失）。')) return;
+    if (!confirm(t('alert.deleteTaskConfirm'))) return;
     await api(`/api/tasks/${idEnc}`, { method: 'DELETE' });
   } else if (action === 'open-folder') {
-    const task = tasks.find((t) => t.id === id);
+    const task = tasks.find((x) => x.id === id);
     if (task) {
       await api('/api/fs/open', {
         method: 'POST',
@@ -323,7 +516,7 @@ async function performAction(action, id) {
       return; // 打开文件夹不需要刷新看板
     }
   } else if (action === 'edit') {
-    const task = tasks.find((t) => t.id === id);
+    const task = tasks.find((x) => x.id === id);
     if (task) openEditor(task);
   }
   if (action !== 'edit') await refresh();
@@ -353,11 +546,11 @@ async function loadBrowse(path) {
     const q = path && isAbsolutePath(path) ? '?path=' + encodeURIComponent(path) : '';
     const res = await api('/api/fs/dirs' + q);
     browseCtx.path = res.path;
-    browsePathEl.textContent = res.path || '（根目录，点击下方路径进入）';
+    browsePathEl.textContent = res.path || t('browse.root');
     browsePathEl.title = res.path;
     browseListing.replaceChildren();
     if (!res.dirs.length) {
-      browseListing.innerHTML = '<p class="history-empty">这个文件夹下没有子文件夹</p>';
+      browseListing.innerHTML = `<p class="history-empty">${esc(t('browse.empty'))}</p>`;
       return;
     }
     for (const dir of res.dirs) {
@@ -370,7 +563,7 @@ async function loadBrowse(path) {
       browseListing.appendChild(btn);
     }
   } catch (err) {
-    alert('浏览失败：' + err.message);
+    alert(tpl('alert.browseFailed', { e: err.message }));
   }
 }
 
@@ -411,7 +604,7 @@ async function pickSystemFolder(input) {
     const res = await api('/api/fs/pick', { method: 'POST' });
     if (res.path) input.value = res.path;
   } catch (err) {
-    alert('系统选择失败：' + err.message);
+    alert(tpl('alert.pickFailed', { e: err.message }));
   }
 }
 
@@ -440,9 +633,9 @@ async function fetchArchived() {
 
 function renderArchive() {
   archiveList.replaceChildren();
-  archiveCount.textContent = `共 ${archivedTasks.length} 条`;
+  archiveCount.textContent = tpl('archive.count', { n: archivedTasks.length });
   if (!archivedTasks.length) {
-    archiveList.innerHTML = '<p class="history-empty">还没有已归档的任务。</p>';
+    archiveList.innerHTML = `<p class="history-empty">${esc(t('archive.empty'))}</p>`;
     archiveSelectAll.checked = false;
     archiveSelectAll.disabled = true;
     archiveDeleteSelected.disabled = true;
@@ -453,15 +646,15 @@ function renderArchive() {
     const row = document.createElement('div');
     row.className = 'history-row';
     row.innerHTML = `
-      <input type="checkbox" class="history-check" data-id="${esc(task.id)}" title="选择此任务">
+      <input type="checkbox" class="history-check" data-id="${esc(task.id)}" title="${esc(t('archive.checkTitle'))}">
       <div class="history-main">
         <div class="history-title">${esc(task.title)}</div>
         <div class="history-path">${esc(task.workspacePath)}</div>
         <div class="history-tags">${tagsHtml(task.tags)}</div>
       </div>
       <div class="history-side">
-        <div class="history-when">完成于 ${esc(fmtTime(task.completedAt))}</div>
-        <button type="button" class="delete-btn" data-del-id="${esc(task.id)}" title="删除此历史记录">删除</button>
+        <div class="history-when">${esc(t('archive.completedAt'))} ${esc(fmtTime(task.completedAt))}</div>
+        <button type="button" class="delete-btn" data-del-id="${esc(task.id)}" title="${esc(t('archive.delete'))}">${esc(t('archive.delete'))}</button>
       </div>`;
     archiveList.appendChild(row);
   }
@@ -510,22 +703,22 @@ archiveList.addEventListener('change', (ev) => {
 archiveList.addEventListener('click', async (ev) => {
   const del = ev.target.closest('button[data-del-id]');
   if (!del) return;
-  if (!confirm('确定删除该条历史记录？此操作不可恢复。')) return;
+  if (!confirm(t('archive.deleteOneConfirm'))) return;
   try {
     await deleteArchived([del.dataset.delId]);
   } catch (err) {
-    alert('删除失败：' + err.message);
+    alert(tpl('alert.deleteFailed', { e: err.message }));
   }
 });
 
 archiveDeleteSelected.addEventListener('click', async () => {
   const ids = checkedArchiveIds();
   if (!ids.length) return;
-  if (!confirm(`确定删除选中的 ${ids.length} 条历史记录？此操作不可恢复。`)) return;
+  if (!confirm(tpl('archive.deleteManyConfirm', { n: ids.length }))) return;
   try {
     await deleteArchived(ids);
   } catch (err) {
-    alert('删除失败：' + err.message);
+    alert(tpl('alert.deleteFailed', { e: err.message }));
   }
 });
 
@@ -538,44 +731,39 @@ document.getElementById('history-toggle').addEventListener('click', async () => 
   try {
     await openArchive();
   } catch (err) {
-    alert('加载历史失败：' + err.message);
-  }
-});
-
-boardEl.addEventListener('click', async (ev) => {
-  const btn = ev.target.closest('button[data-action]');
-  if (!btn) return;
-  try {
-    await performAction(btn.dataset.action, btn.dataset.id);
-  } catch (err) {
-    alert('操作失败：' + err.message);
+    alert(tpl('alert.historyLoadFailed', { e: err.message }));
   }
 });
 
 // ---- 首次使用引导向导（与 README 的 Quick Start 同一步骤）----
-// 首次访问自动弹出；「跳过」或「开始使用」后本浏览器不再自动弹出，
-// 随时可点顶栏「使用向导」重开。
 
 const WIZARD_KEY = 'lk-wizard-seen';
 const wizardModal = document.getElementById('wizard-modal');
-const wizardSteps = Array.from(document.querySelectorAll('#wizard-steps .wizard-step'));
+const wizardSteps = document.getElementById('wizard-steps');
 const wizardDots = document.getElementById('wizard-dots');
 const wizardPrev = document.getElementById('wizard-prev');
 const wizardNext = document.getElementById('wizard-next');
 const wizardFinish = document.getElementById('wizard-finish');
 let wizardIndex = 0;
+const WIZARD_STEP_COUNT = 4;
 
 function renderWizard() {
-  wizardSteps.forEach((s, i) => s.classList.toggle('hidden', i !== wizardIndex));
+  wizardSteps.replaceChildren();
+  for (let i = 0; i < WIZARD_STEP_COUNT; i++) {
+    const section = document.createElement('section');
+    section.className = 'wizard-step' + (i === wizardIndex ? '' : ' hidden');
+    section.innerHTML = t('wizard.step' + (i + 1));
+    wizardSteps.appendChild(section);
+  }
   wizardDots.replaceChildren();
-  wizardSteps.forEach((_, i) => {
+  for (let i = 0; i < WIZARD_STEP_COUNT; i++) {
     const dot = document.createElement('span');
     dot.className = 'wizard-dot' + (i === wizardIndex ? ' active' : i < wizardIndex ? ' done' : '');
     wizardDots.appendChild(dot);
-  });
+  }
   wizardPrev.classList.toggle('hidden', wizardIndex === 0);
-  wizardNext.classList.toggle('hidden', wizardIndex === wizardSteps.length - 1);
-  wizardFinish.classList.toggle('hidden', wizardIndex !== wizardSteps.length - 1);
+  wizardNext.classList.toggle('hidden', wizardIndex === WIZARD_STEP_COUNT - 1);
+  wizardFinish.classList.toggle('hidden', wizardIndex !== WIZARD_STEP_COUNT - 1);
 }
 
 function openWizard() {
@@ -596,7 +784,7 @@ wizardPrev.addEventListener('click', () => {
   }
 });
 wizardNext.addEventListener('click', () => {
-  if (wizardIndex < wizardSteps.length - 1) {
+  if (wizardIndex < WIZARD_STEP_COUNT - 1) {
     wizardIndex++;
     renderWizard();
   }
@@ -608,8 +796,46 @@ wizardModal.addEventListener('click', (ev) => {
 });
 document.getElementById('wizard-open').addEventListener('click', openWizard);
 
+// ---- 语言切换 ----
+
+function applyLang() {
+  document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
+  document.querySelectorAll('[data-i18n]').forEach((el) => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach((el) => {
+    el.title = t(el.dataset.i18nTitle);
+  });
+  document.querySelectorAll('[data-i18n-ph]').forEach((el) => {
+    el.placeholder = t(el.dataset.i18nPh);
+  });
+  langToggle.textContent = lang === 'zh' ? 'EN' : '中文';
+  langToggle.title = t('topbar.langTitle');
+  setConnection(connected);
+  render();
+  if (!archiveModal.classList.contains('hidden')) renderArchive();
+  if (!wizardModal.classList.contains('hidden')) renderWizard();
+}
+
+langToggle.addEventListener('click', () => {
+  lang = lang === 'zh' ? 'en' : 'zh';
+  localStorage.setItem('lk-lang', lang);
+  applyLang();
+});
+
+boardEl.addEventListener('click', async (ev) => {
+  const btn = ev.target.closest('button[data-action]');
+  if (!btn) return;
+  try {
+    await performAction(btn.dataset.action, btn.dataset.id);
+  } catch (err) {
+    alert(tpl('alert.opFailed', { e: err.message }));
+  }
+});
+
+applyLang();
 refresh();
 setInterval(refresh, REFRESH_MS);
 
-// 首次访问自动弹出引导（勾过「不再自动显示」或点过跳过则不再弹出）
+// 首次访问自动弹出引导（点过「跳过 / 开始使用」后不再弹出，随时可点「使用向导」重开）
 if (!localStorage.getItem(WIZARD_KEY)) openWizard();

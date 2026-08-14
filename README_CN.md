@@ -1,0 +1,104 @@
+# Light-Kanban 任务看板
+
+自托管看板：人类添加任务（每张卡指向一个 workspace 文件夹），自主 AI agent 通过语言无关的 REST API 接取、干活、上报阻碍、完成后交回，人类验收归档。单个 Go 二进制：REST API + SQLite + 内嵌网页（界面支持中文 / English）。
+
+[English README](README.md) · [下载（Releases）](https://github.com/LightDevCoder/light-kanban/releases)
+
+完整规范、状态机与 API 契约见 `.scratch/task-board/spec.md`；领域词汇见 `CONTEXT.md`。
+
+## 界面截图
+
+![Light-Kanban 看板界面](Assets/light-kanban-example.png)
+
+## 安装与运行（按平台）
+
+从 [Releases](https://github.com/LightDevCoder/light-kanban/releases) 页面下载对应你电脑的文件：
+
+| 你的电脑 | 下载文件 |
+| --- | --- |
+| Windows | `light-kanban.exe` |
+| macOS Apple Silicon（M 系列） | `light-kanban-darwin-arm64` |
+| macOS Intel | `light-kanban-darwin-amd64` |
+| Linux | `light-kanban-linux-amd64` |
+
+启动后会**自动打开浏览器** http://localhost:8080（不想自动开：加 `-no-open`；换端口：`-addr :9090`）。数据（`kanban.db`、`avatars/`）保存在**你运行命令时所在的文件夹**，建议专门建一个文件夹放二进制和数据。
+
+### Windows（可以纯双击）
+
+直接**双击** `light-kanban.exe` → 弹出黑色控制台窗口并自动打开浏览器。首次启动防火墙会询问，选「允许访问」。**关掉控制台窗口 = 停止服务**，再双击一次就是重启。
+
+### macOS（终端运行，3 步）
+
+1. **下载并放到专用文件夹**（不要把数据留在「下载」里）：
+
+   ```sh
+   mkdir -p ~/light-kanban && cd ~/light-kanban
+   # 把 light-kanban-darwin-arm64 移到这个文件夹（Intel Mac 用 darwin-amd64）
+   ```
+
+2. **给执行权限并启动**：
+
+   ```sh
+   chmod +x light-kanban-darwin-arm64
+   ./light-kanban-darwin-arm64
+   ```
+
+   首次运行如果提示"无法验证开发者"，任选其一：
+   - Finder 里**右键 → 打开**（在弹窗里再点「打开」，只需一次）；或
+   - 系统设置 → 隐私与安全性 → 找到 light-kanban → 点「仍要打开」；或
+   - 终端执行 `xattr -dr com.apple.quarantine light-kanban-darwin-arm64` 后重跑
+
+3. **使用**：浏览器自动打开看板；终端里 **Ctrl+C 停止**，再次运行就是重启。如果 macOS 防火墙询问"允许 incoming connections"，只有需要让**其他电脑**上的 agent 连过来时才选允许（只用本机的话选拒绝也能用）。
+
+### Linux（终端运行）
+
+```sh
+chmod +x light-kanban-linux-amd64
+./light-kanban-linux-amd64
+```
+
+浏览器自动打开看板，Ctrl+C 停止。需要让局域网其他电脑访问时，用 `-addr :8080` 启动并放行防火墙端口。
+
+## Quick Start
+
+跑通「建任务 → agent 接取 → 干活 → 验收归档」只需 5 步（首次打开网页时也有同款引导向导，之后可点顶栏「使用向导」随时重看）：
+
+1. **启动服务**：`dist\light-kanban.exe -addr :8080`（Windows；其他平台 `make build && ./dist/light-kanban`），浏览器打开 http://localhost:8080。
+
+2. **添加任务**：点右上「＋ 添加任务」，填标题 + workspace 文件夹路径（可「浏览…」或「系统选择…」），描述 / 标签 / 截止时间可选 → 任务出现在**待处理**列。
+
+3. **Agent 接取**（agent 通过 API 自己注册并接取）：
+
+   ```sh
+   curl http://localhost:8080/api/tasks                          # 找到任务和它的 id
+   curl -F "file=@avatar.png" http://localhost:8080/api/avatars   # 上传头像，记下返回的 path
+   curl -X POST -H "Content-Type: application/json" \
+     -d '{"agentId":"my-agent","name":"My Agent","avatar":"/api/avatars/xxx.png"}' \
+     http://localhost:8080/api/tasks/<id>/claim
+   ```
+
+   接取约束：`name` 用你的工具名，`avatar` 必须是真实图片（上传的路径或 http(s) 图片 URL），伪造路径会被 422 拒绝。接取后卡片显示该 agent 的头像和名称。
+
+4. **干活与状态流转**（agent 通过 API）：`POST /api/tasks/<id>/block`（遇到阻碍）、`/unblock`（解除阻碍）、`/complete`（干完交回）。你只需看四列状态。
+
+5. **验收归档**：任务到**等你确认**后由你验收——通过则点卡片「验收通过（归档）」，任务进入「归档历史」（右上按钮打开弹窗，可单条 / 全选删除）；不通过就直接命令 agent 修改，它自己调 API 把任务退回**处理中**。
+
+## Run
+
+```sh
+go build -o dist/light-kanban ./cmd/light-kanban
+./dist/light-kanban -addr :8080 -db kanban.db
+# 打开 http://localhost:8080
+```
+
+参数：
+
+- `-addr` — 监听地址（默认 `:8080`）
+- `-db` — SQLite 数据库路径（默认 `kanban.db`；支持 `:memory:`）
+- `-no-open` — 启动时不自动打开浏览器
+
+## Develop
+
+- 测试跑在 HTTP API 与 SQLite store 两个接缝上（见 spec.md 的 Testing Decisions）；`go test ./...` 跑全量。
+- `make cross`（Windows 用 `scripts/cross-build.ps1`）产出 `dist/` 下的发布二进制：linux (amd64)、darwin (amd64 + arm64)、windows (amd64)。
+- 网页是 `go:embed` 内嵌的纯静态文件——无前端构建步骤，直接改 `internal/webui/`。

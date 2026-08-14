@@ -24,7 +24,7 @@ for (const line of lines) {
   cells.pop();
   if (cells.length < 5) continue;
   if (cells[0] === '#' || /^-+$/.test(cells[0])) continue;
-  if (!/^[A-Z]\d+$/.test(cells[0])) continue;
+  if (!/^[A-Z]\d+[a-z]?$/.test(cells[0])) continue;
   rows.push({ group, id: cells[0], what: cells[1], how: cells[2], expected: cells[3] });
 }
 if (rows.length === 0) {

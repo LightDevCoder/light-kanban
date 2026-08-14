@@ -3,17 +3,18 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Light-Kanban 任务看板</title>
+  <title data-i18n="docTitle">Light-Kanban 任务看板</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <header class="topbar">
-    <h1>Light-Kanban 任务看板</h1>
+    <h1 data-i18n="docTitle">Light-Kanban 任务看板</h1>
     <div class="topbar-right">
-      <button id="add-task-btn" class="primary-btn" type="button">＋ 添加任务</button>
-      <button id="wizard-open" class="ghost-btn" type="button" title="重新打开使用引导">使用向导</button>
-      <button id="history-toggle" class="ghost-btn" type="button">归档历史</button>
-      <span id="connection" class="connection ok" title="连接状态">●</span>
+      <button id="add-task-btn" class="primary-btn" type="button" data-i18n="topbar.add">＋ 添加任务</button>
+      <button id="lang-toggle" class="ghost-btn" type="button" title="">EN</button>
+      <button id="wizard-open" class="ghost-btn" type="button" data-i18n="topbar.wizard" data-i18n-title="topbar.wizardTitle">使用向导</button>
+      <button id="history-toggle" class="ghost-btn" type="button" data-i18n="topbar.history" data-i18n-title="topbar.historyTitle">归档历史</button>
+      <span id="connection" class="connection ok" title="">●</span>
     </div>
   </header>
 
@@ -22,21 +23,21 @@
   <!-- 添加任务弹窗 -->
   <div id="add-modal" class="modal-backdrop hidden">
     <form id="add-form" class="modal" autocomplete="off">
-      <h3>添加任务</h3>
-      <label>标题 <input name="title" required></label>
-      <label>workspace 文件夹
+      <h3 data-i18n="add.title">添加任务</h3>
+      <label><span data-i18n="add.titleField">标题</span> <input name="title" required data-i18n-ph="add.phTitle"></label>
+      <label><span data-i18n="add.workspaceField">workspace 文件夹</span>
         <span class="path-row">
-          <input name="workspacePath" required placeholder="任务对应的项目文件夹路径">
-          <button type="button" class="browse-btn" data-browse-target="add" title="在页面里浏览服务器文件夹">浏览…</button>
-          <button type="button" class="browse-btn" data-pick-target="add" title="调起服务器所在电脑的系统文件夹对话框">系统选择…</button>
+          <input name="workspacePath" required data-i18n-ph="add.phWorkspace">
+          <button type="button" class="browse-btn" data-browse-target="add" data-i18n="browse.browse" data-i18n-title="browse.browseTitle">浏览…</button>
+          <button type="button" class="browse-btn" data-pick-target="add" data-i18n="browse.pick" data-i18n-title="browse.pickTitle">系统选择…</button>
         </span>
       </label>
-      <label>描述 / 指令正文 <textarea name="description" rows="3" placeholder="给 agent 的指令正文（可选）"></textarea></label>
-      <label>标签（逗号分隔多个，如 go, ui） <input name="tags"></label>
-      <label>截止时间（留空表示无截止） <input name="dueAt" type="datetime-local"></label>
+      <label><span data-i18n="add.descField">描述 / 指令正文</span> <textarea name="description" rows="3" data-i18n-ph="add.phDesc"></textarea></label>
+      <label><span data-i18n="add.tagsField">标签（逗号分隔多个，如 go, ui）</span> <input name="tags" data-i18n-ph="add.phTags"></label>
+      <label><span data-i18n="add.dueField">截止时间（留空表示无截止）</span> <input name="dueAt" type="datetime-local"></label>
       <div class="modal-actions">
-        <button type="submit">添加</button>
-        <button type="button" id="add-cancel">取消</button>
+        <button type="submit" data-i18n="add.submit">添加</button>
+        <button type="button" id="add-cancel" data-i18n="common.cancel">取消</button>
       </div>
     </form>
   </div>
@@ -44,30 +45,30 @@
   <!-- 编辑任务弹窗 -->
   <div id="edit-modal" class="modal-backdrop hidden">
     <form id="edit-form" class="modal" autocomplete="off">
-      <h3>编辑任务</h3>
-      <label>标题 <input name="title" required></label>
-      <label>workspace 文件夹
+      <h3 data-i18n="edit.title">编辑任务</h3>
+      <label><span data-i18n="edit.titleField">标题</span> <input name="title" required></label>
+      <label><span data-i18n="edit.workspaceField">workspace 文件夹</span>
         <span class="path-row">
           <input name="workspacePath" required>
-          <button type="button" class="browse-btn" data-browse-target="edit" title="在页面里浏览服务器文件夹">浏览…</button>
-          <button type="button" class="browse-btn" data-pick-target="edit" title="调起服务器所在电脑的系统文件夹对话框">系统选择…</button>
+          <button type="button" class="browse-btn" data-browse-target="edit" data-i18n="browse.browse" data-i18n-title="browse.browseTitle">浏览…</button>
+          <button type="button" class="browse-btn" data-pick-target="edit" data-i18n="browse.pick" data-i18n-title="browse.pickTitle">系统选择…</button>
         </span>
       </label>
-      <label>描述 / 指令正文 <textarea name="description" rows="3"></textarea></label>
-      <label>标签（逗号分隔多个） <input name="tags"></label>
-      <label>截止时间（留空表示无截止） <input name="dueAt" type="datetime-local"></label>
-      <label>状态（人工纠正用）
+      <label><span data-i18n="edit.descField">描述 / 指令正文</span> <textarea name="description" rows="3"></textarea></label>
+      <label><span data-i18n="edit.tagsField">标签（逗号分隔多个）</span> <input name="tags"></label>
+      <label><span data-i18n="edit.dueField">截止时间（留空表示无截止）</span> <input name="dueAt" type="datetime-local"></label>
+      <label><span data-i18n="edit.statusField">状态（人工纠正用）</span>
         <select name="status">
-          <option value="todo">待处理</option>
-          <option value="in_progress">处理中</option>
-          <option value="blocked">遇到阻碍</option>
-          <option value="awaiting_confirmation">等你确认</option>
-          <option value="archived">已归档</option>
+          <option value="todo" data-i18n="status.todo">待处理</option>
+          <option value="in_progress" data-i18n="status.in_progress">处理中</option>
+          <option value="blocked" data-i18n="status.blocked">遇到阻碍</option>
+          <option value="awaiting_confirmation" data-i18n="status.awaiting_confirmation">等你确认</option>
+          <option value="archived" data-i18n="status.archived">已归档</option>
         </select>
       </label>
       <div class="modal-actions">
-        <button type="submit">保存</button>
-        <button type="button" id="edit-cancel">取消</button>
+        <button type="submit" data-i18n="edit.submit">保存</button>
+        <button type="button" id="edit-cancel" data-i18n="common.cancel">取消</button>
       </div>
     </form>
   </div>
@@ -75,28 +76,14 @@
   <!-- 归档历史弹窗 -->
   <div id="archive-modal" class="modal-backdrop hidden">
     <div class="modal archive-modal">
-      <h3>已归档历史 <span id="archive-count" class="archive-count"></span></h3>
+      <h3><span data-i18n="archive.title">已归档历史</span> <span id="archive-count" class="archive-count"></span></h3>
       <div class="archive-toolbar">
-        <label class="archive-select-all"><input type="checkbox" id="archive-select-all"> 全选</label>
-        <button type="button" id="archive-delete-selected" class="danger-btn" disabled>删除选中</button>
+        <label class="archive-select-all"><input type="checkbox" id="archive-select-all"> <span data-i18n="archive.selectAll">全选</span></label>
+        <button type="button" id="archive-delete-selected" class="danger-btn" disabled data-i18n="archive.deleteSelected">删除选中</button>
       </div>
       <div id="archive-list" class="history-list"></div>
       <div class="modal-actions">
-        <button type="button" id="archive-close">关闭</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 文件夹浏览弹窗 -->
-  <div id="browse-modal" class="modal-backdrop hidden">
-    <div class="modal browse-modal">
-      <h3>选择 workspace 文件夹</h3>
-      <div id="browse-path" class="browse-path" title="">/</div>
-      <div id="browse-listing" class="browse-listing"></div>
-      <div class="modal-actions">
-        <button type="button" id="browse-up">上级</button>
-        <button type="button" id="browse-select">选择此文件夹</button>
-        <button type="button" id="browse-cancel">取消</button>
+        <button type="button" id="archive-close" data-i18n="archive.close">关闭</button>
       </div>
     </div>
   </div>
@@ -104,50 +91,28 @@
   <!-- 首次使用引导向导 -->
   <div id="wizard-modal" class="modal-backdrop hidden">
     <div class="modal wizard-modal">
-      <h3>欢迎使用 Light-Kanban 任务看板</h3>
-      <div id="wizard-steps" class="wizard-steps">
-        <section class="wizard-step">
-          <h4>① 添加任务</h4>
-          <p>点右上角「＋ 添加任务」，在弹窗里填写：</p>
-          <ul>
-            <li><b>标题</b>：要让 agent 做什么</li>
-            <li><b>workspace 文件夹</b>：该任务的项目文件夹路径（可「浏览…」或「系统选择…」）</li>
-            <li>可选：描述 / 标签 / 截止时间</li>
-          </ul>
-          <p>添加后任务出现在<b>待处理</b>列，agent 就可以接取了。</p>
-        </section>
-        <section class="wizard-step hidden">
-          <h4>② Agent 接取（agent 自己做）</h4>
-          <p>告诉你的 agent 通过 API 自己注册并接取：</p>
-          <pre><code>GET  /api/tasks                     # 找到任务和它的 id
-POST /api/avatars                   # 上传头像图片（multipart file）
-POST /api/tasks/&lt;id&gt;/claim      # body: {"agentId","name","avatar"}</code></pre>
-          <p>接取约束：<code>name</code> 用工具名，<code>avatar</code> 必须是真实图片（上传的路径或 http(s) 图片 URL），伪造路径会被 422 拒绝。接取后卡片显示 agent 的头像和名称。</p>
-        </section>
-        <section class="wizard-step hidden">
-          <h4>③ 干活与状态流转（agent 通过 API）</h4>
-          <p>agent 干活时通过 API 更新状态，你只需要看四列：</p>
-          <ul>
-            <li><code>POST /api/tasks/&lt;id&gt;/block</code> — 遇到阻碍 → <b>遇到阻碍</b>列</li>
-            <li><code>POST /api/tasks/&lt;id&gt;/unblock</code> — 解除阻碍 → <b>处理中</b>列</li>
-            <li><code>POST /api/tasks/&lt;id&gt;/complete</code> — 干完交回 → <b>等你确认</b>列</li>
-          </ul>
-        </section>
-        <section class="wizard-step hidden">
-          <h4>④ 验收与归档</h4>
-          <p>任务到「等你确认」后由你验收：</p>
-          <ul>
-            <li>通过 → 点卡片上的「验收通过（归档）」，任务进入<b>归档历史</b>（右上「归档历史」弹窗，可单条 / 全选删除）</li>
-            <li>不通过 → 直接命令 agent 修改，它自己调 API 把任务退回<b>处理中</b></li>
-          </ul>
-        </section>
-      </div>
+      <h3 data-i18n="wizard.welcome">欢迎使用 Light-Kanban 任务看板</h3>
+      <div id="wizard-steps" class="wizard-steps"></div>
       <div id="wizard-dots" class="wizard-dots"></div>
       <div class="modal-actions">
-        <button type="button" id="wizard-skip">跳过</button>
-        <button type="button" id="wizard-prev" class="hidden">上一步</button>
-        <button type="button" id="wizard-next">下一步</button>
-        <button type="button" id="wizard-finish" class="hidden">开始使用</button>
+        <button type="button" id="wizard-skip" data-i18n="wizard.skip">跳过</button>
+        <button type="button" id="wizard-prev" class="hidden" data-i18n="wizard.prev">上一步</button>
+        <button type="button" id="wizard-next" data-i18n="wizard.next">下一步</button>
+        <button type="button" id="wizard-finish" class="hidden" data-i18n="wizard.finish">开始使用</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 文件夹浏览弹窗 -->
+  <div id="browse-modal" class="modal-backdrop hidden">
+    <div class="modal browse-modal">
+      <h3 data-i18n="browse.title">选择 workspace 文件夹</h3>
+      <div id="browse-path" class="browse-path" title="">/</div>
+      <div id="browse-listing" class="browse-listing"></div>
+      <div class="modal-actions">
+        <button type="button" id="browse-up" data-i18n="browse.up">上级</button>
+        <button type="button" id="browse-select" data-i18n="browse.select">选择此文件夹</button>
+        <button type="button" id="browse-cancel" data-i18n="common.cancel">取消</button>
       </div>
     </div>
   </div>
