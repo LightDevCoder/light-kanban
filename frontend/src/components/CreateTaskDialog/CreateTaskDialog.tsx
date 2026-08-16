@@ -25,7 +25,7 @@ export function CreateTaskDialog({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <Modal onClose={onClose}>
+    <Modal onClose={onClose} dataTour="create-dialog">
       <h3>{t('add.title')}</h3>
       <TaskForm isEdit={false} onSubmit={submit} onCancel={onClose} submitting={create.isPending} />
     </Modal>

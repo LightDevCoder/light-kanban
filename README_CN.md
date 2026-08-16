@@ -18,7 +18,8 @@
 - **高密度紧凑卡片**：短号（`LK-XXXX`）、标题、接取 agent 的头像、workspace 文件夹名（带颜色点）、最多两个标签 `+N`，只有截止 / 逾期 / 疑似卡住 / 阻碍原因这类真正需要关注的信号才带颜色。
 - **任务抽屉**：点任意卡片从右侧打开完整详情——默认查看模式，需要时再进入编辑。人类的主要操作都在这里：**验收通过**（归档）、**退回修改**（带反馈退回处理中，agent 可通过 API 读到）、**回收到待处理**（疑似卡住任务）、删除、打开项目文件夹。
 - **顶栏搜索与筛选**：匹配标题 / 描述 / workspace / 标签 / Agent 名；筛选支持 Agent + Workspace + 标签 + 状态自由组合，结果直接作用在看板上。
-- **设置菜单**：界面语言（中文 / English）、使用向导、归档历史（单条 / 全选删除）。
+- **设置菜单**：界面语言（中文 / English）、使用指南、归档历史（单条 / 全选删除；每条记录都能直接打开对应项目目录）。
+- **交互式产品导览**：首次打开时在**真实界面上**运行引导——高亮指向真实控件，你亲自点击，导览跟着你走完新建任务、任务抽屉、设置菜单和归档历史。只有完整走到「完成」才会标记为已看完；跳过的话下次启动还会出现，之后也可以随时从设置菜单重新打开。
 - **完整双语界面**，按浏览器记忆选择；5 秒轻量轮询（无需 WebSocket）。
 
 ## 安装与运行（按平台）
@@ -72,7 +73,7 @@ chmod +x light-kanban-linux-amd64
 
 ## Quick Start
 
-跑通「建任务 → agent 接取 → 干活 → 验收归档」只需 5 步（首次打开网页时也有同款引导向导，之后可在右上「设置」菜单里随时重看）：
+跑通「建任务 → agent 接取 → 干活 → 验收归档」只需 5 步（首次打开网页时会在**真实界面上**自动运行交互式产品导览——点击高亮的真实控件，导览会带你走完新建任务、任务抽屉、设置菜单与归档历史；完整走完一次即标记完成，之后可在右上「设置」菜单里随时重看）：
 
 1. **启动服务**：`dist\light-kanban.exe`（Windows；其他平台 `make build && ./dist/light-kanban`），浏览器打开 http://127.0.0.1:8641。（局域网 agent 需要 `-addr :8641`——见上文。）
 
@@ -117,7 +118,8 @@ make build            # 构建前端 → 拷入 internal/webui/dist → 编译�
 ## Develop
 
 - 测试跑在 HTTP API 与 SQLite store 两个接缝上（见 spec.md 的 Testing Decisions）；`go test ./...` 跑全量。前端产物已提交在 `internal/webui/dist/`，fresh clone 不装 npm 也能通过。
-- **提交前检查：`make check`**——重建前端，若提交的 `internal/webui/dist/` 与 `frontend/src/` 不同步则失败，然后跑 gofmt / `go vet` / `go test`。CI（`.github/workflows/ci.yml`）对每次 push 到 main 和每个 PR 执行同样检查。
+- 产品导览的状态与几何逻辑是纯函数，用 vitest 单测覆盖：`cd frontend && npm test`。
+- **提交前检查：`make check`**——重建前端，跑前端单测，若提交的 `internal/webui/dist/` 与 `frontend/src/` 不同步则失败，然后跑 gofmt / `go vet` / `go test`。CI（`.github/workflows/ci.yml`）对每次 push 到 main 和每个 PR 执行同样检查。
 - `make run` 以默认的本机监听启动 Go 后端；`make run-lan` 是显式开放局域网的变体（绑定全部网卡），用于测试远端 agent。
 - 网页 UI 是 `frontend/` 下的 React 18 + TypeScript + Vite 应用（见 ADR-0002）：首次 `make frontend-install`；开发用 `make dev-frontend`（Vite :5173，代理 `/api` 到 :8641 的 Go 后端）；`make frontend-build` 把生产包 staged 到 `internal/webui/dist/`。
 - `make cross`（Windows 用 `scripts/cross-build.ps1`）产出 `dist/` 下的发布二进制：linux (amd64)、darwin (amd64 + arm64)、windows (amd64)——两者都会先构建前端。

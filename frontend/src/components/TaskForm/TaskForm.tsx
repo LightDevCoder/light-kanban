@@ -89,11 +89,12 @@ export function TaskForm({
           required
           autoFocus={!isEdit}
           placeholder={isEdit ? undefined : t('add.phTitle')}
+          data-tour={isEdit ? undefined : 'task-title'}
         />
       </label>
       <label className="form-field">
         <span>{t(`${prefix}.workspaceField`)}</span>
-        <span className="path-row">
+        <span className="path-row" data-tour={isEdit ? undefined : 'workspace-path'}>
           <input
             value={workspacePath}
             onChange={(e) => setWorkspacePath(e.target.value)}
@@ -146,7 +147,12 @@ export function TaskForm({
         </label>
       )}
       <div className="modal-actions">
-        <button type="submit" className="btn primary" disabled={submitting}>
+        <button
+          type="submit"
+          className="btn primary"
+          disabled={submitting}
+          data-tour={isEdit ? undefined : 'create-submit'}
+        >
           {t(`${prefix}.submit`)}
         </button>
         <button type="button" className="btn" onClick={onCancel}>

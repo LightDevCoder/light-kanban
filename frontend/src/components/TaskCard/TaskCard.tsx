@@ -28,7 +28,7 @@ export function TaskCard({
   const stuckHours = Math.round(STUCK_THRESHOLD_MS / 3600000)
 
   return (
-    <article className="card" onClick={() => onOpen()}>
+    <article className="card" data-tour="task-card" data-tour-task-id={task.id} onClick={() => onOpen()}>
       <div className="card-row1">
         <span className="card-id">{shortId(task.id)}</span>
         {agent && <Avatar agent={agent} />}

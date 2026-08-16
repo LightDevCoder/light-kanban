@@ -104,11 +104,42 @@ const zh = {
   'pick.waiting': '等待系统文件夹窗口……（窗口弹在运行看板的电脑上，没看到可点右侧「取消等待」）',
   'pick.cancelWait': '取消等待',
 
-  'wizard.welcome': '欢迎使用 Light-Kanban 任务看板',
-  'wizard.skip': '跳过',
-  'wizard.prev': '上一步',
-  'wizard.next': '下一步',
-  'wizard.finish': '开始使用',
+  'tour.step': '第 {current} / {total} 步',
+  'tour.skip': '跳过',
+  'tour.next': '下一步',
+  'tour.finish': '完成',
+  'tour.hint.click': '点击高亮的控件继续',
+  'tour.hint.input': '输入内容后自动继续',
+  'tour.missingTitle': '没有找到目标控件',
+  'tour.missingBody': '目标控件暂时没有出现。可以点「下一步」跳过这一步，或点「跳过」退出导览。',
+  'tour.createTask.title': '创建你的第一个任务',
+  'tour.createTask.body': '点击 +，把一个真实项目加入看板。',
+  'tour.workspacePath.title': '选择一个项目目录',
+  'tour.workspacePath.body': '每个任务都对应一个真实项目目录。可以直接输入路径，也可以点击「选择…」打开系统文件夹窗口。',
+  'tour.taskTitle.title': '给任务一个清楚的名称',
+  'tour.taskTitle.body': 'Agent 会通过这个任务卡理解当前工作目标。',
+  'tour.createSubmit.title': '创建任务',
+  'tour.createSubmit.body': '点击「创建」，任务会进入「待处理」列。',
+  'tour.taskCard.title': '任务已进入待处理',
+  'tour.taskCard.body': 'Agent 可以通过 API 认领它并开始工作。点击卡片查看完整信息。',
+  'tour.taskDrawer.title': '任务详情',
+  'tour.taskDrawer.body': '任务详情都集中在这里。你可以查看状态、Agent、项目目录、描述和执行结果。',
+  'tour.openFolder.title': '打开项目目录',
+  'tour.openFolder.body': '这里可以随时直接打开任务对应的项目目录。',
+  'tour.workflow.title': 'Agent 工作流',
+  'tour.workflow.body': '任务会按「待处理 → 处理中 → 遇到阻碍（必要时）→ 等你确认 → 归档」流转。\nAgent 通过 API 更新任务状态；你主要负责创建任务、观察进度和最终确认。',
+  'tour.review.title': '等你确认',
+  'tour.review.body': 'Agent 完成工作后，任务会来到这里等待你的确认。\n「验收通过」归档任务；「退回修改」把任务退回 Agent，并附带修改意见。',
+  'tour.settings.title': '设置',
+  'tour.settings.body': '这里还能查看使用指南和归档记录。',
+  'tour.settingsArchive.title': '归档历史',
+  'tour.settingsArchive.body': '点击「归档历史」，查看所有已完成并确认的任务。',
+  'tour.archive.title': '归档历史',
+  'tour.archive.body': '完成并确认的任务会保存在这里。',
+  'tour.archiveFolder.title': '回到原项目目录',
+  'tour.archiveFolder.body': '即使任务已经完成，也可以从归档历史直接返回原项目目录。',
+  'tour.finish.title': '准备好了',
+  'tour.finish.body': '创建任务后，让 Agent 认领并执行。\n工作完成后，你只需要回来确认结果。\n\n之后可以随时从设置菜单再次打开这个指南。',
 
   'alert.deleteTaskConfirm': '确定删除该任务？此操作不可恢复（归档历史里也会消失）。',
   'alert.addFailed': '创建任务失败：{e}',
@@ -117,41 +148,6 @@ const zh = {
   'alert.historyLoadFailed': '加载历史失败：{e}',
   'alert.deleteFailed': '删除失败：{e}',
   'alert.pickFailed': '系统选择失败：{e}\n\n可以直接在输入框里输入或粘贴绝对路径（例如 /Users/你的名字/Projects/xxx），不依赖系统窗口。',
-
-  wizard: {
-    steps: [
-      {
-        title: '① 新建任务',
-        blocks: [
-          { type: 'p', text: '点右上角「+」，在弹窗里填写：' },
-          { type: 'list', items: ['标题：要让 agent 做什么', 'workspace 文件夹：直接输入/粘贴路径，或点「选择…」调起系统文件夹窗口', '可选：描述 / 标签 / 截止时间'] },
-          { type: 'p', text: '创建后任务出现在待处理列，agent 就可以接取了。' },
-        ],
-      },
-      {
-        title: '② Agent 接取（agent 自己做）',
-        blocks: [
-          { type: 'p', text: '告诉你的 agent 通过 API 自己注册并接取：' },
-          { type: 'code', text: 'GET  /api/tasks                     # 找到任务和它的 id\nPOST /api/avatars                   # 上传头像图片（multipart file）\nPOST /api/tasks/<id>/claim      # body: {"agentId","name","avatar"}' },
-          { type: 'p', text: '接取约束：name 用工具名；avatar 必须是 agent 自己的图标图片（例如 Codex 用 Codex 图标、Claude Code 用 Claude Code 图标——上传后的路径或 http(s) 图片 URL），占位图或伪造路径会被 422 拒绝。接取后卡片右上角显示 agent 头像。' },
-        ],
-      },
-      {
-        title: '③ 干活与状态流转（agent 通过 API）',
-        blocks: [
-          { type: 'p', text: 'agent 干活时通过 API 更新状态，你只需要看四列：' },
-          { type: 'list', items: ['POST /api/tasks/<id>/block — 遇到阻碍（可带 {"reason":"…"} 说明原因）', 'POST /api/tasks/<id>/unblock — 解除阻碍 → 处理中', 'POST /api/tasks/<id>/complete — 干完交回 → 等你确认'] },
-        ],
-      },
-      {
-        title: '④ 验收与归档',
-        blocks: [
-          { type: 'p', text: '任务到「等你确认」后由你验收（点卡片打开详情，或悬停卡片）：' },
-          { type: 'list', items: ['通过 →「验收通过」，任务进入归档历史（右上设置菜单里，可单条 / 全选删除）', '不通过 →「退回修改」并填写反馈，任务回到处理中，agent 可通过 API 读到反馈'] },
-        ],
-      },
-    ],
-  },
 }
 
 export default zh

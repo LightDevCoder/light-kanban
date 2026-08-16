@@ -105,11 +105,42 @@ const en: Dict = {
   'pick.waiting': 'Waiting for the system folder dialog… (it opens on the machine running the board — click "Stop waiting" if you don\'t see it)',
   'pick.cancelWait': 'Stop waiting',
 
-  'wizard.welcome': 'Welcome to Light-Kanban',
-  'wizard.skip': 'Skip',
-  'wizard.prev': 'Back',
-  'wizard.next': 'Next',
-  'wizard.finish': 'Get started',
+  'tour.step': 'Step {current} of {total}',
+  'tour.skip': 'Skip',
+  'tour.next': 'Next',
+  'tour.finish': 'Finish',
+  'tour.hint.click': 'Click the highlighted control to continue',
+  'tour.hint.input': 'Type into the field to continue',
+  'tour.missingTitle': 'Target control not found',
+  'tour.missingBody': "The highlighted control didn't show up. Click Next to move past this step, or Skip to leave the tour.",
+  'tour.createTask.title': 'Create your first task',
+  'tour.createTask.body': 'Click + to add a real project to the board.',
+  'tour.workspacePath.title': 'Pick a project folder',
+  'tour.workspacePath.body': 'Every task points at a real project folder. Type a path directly, or click "Choose…" to open the system folder dialog.',
+  'tour.taskTitle.title': 'Give the task a clear name',
+  'tour.taskTitle.body': 'The agent reads this card to understand the goal.',
+  'tour.createSubmit.title': 'Create the task',
+  'tour.createSubmit.body': 'Click Create and the task lands in To Do.',
+  'tour.taskCard.title': 'The task is in To Do',
+  'tour.taskCard.body': 'An agent can claim it via the API and start working. Click the card for the full picture.',
+  'tour.taskDrawer.title': 'Task details',
+  'tour.taskDrawer.body': 'Everything lives here: status, agent, project folder, description and results.',
+  'tour.openFolder.title': 'Open the project folder',
+  'tour.openFolder.body': 'Jump straight to the project folder for this task at any time.',
+  'tour.workflow.title': 'Agent workflow',
+  'tour.workflow.body': 'Tasks flow To Do → In Progress → Blocked (when needed) → Awaiting Confirmation → Archive.\nThe agent updates status via the API; you create tasks, watch progress, and give the final confirmation.',
+  'tour.review.title': 'Awaiting Confirmation',
+  'tour.review.body': "When the agent finishes, the task lands here for your review.\nAccept archives it; Request Changes sends it back to the agent with your feedback.",
+  'tour.settings.title': 'Settings',
+  'tour.settings.body': 'The guide and the archive history live here.',
+  'tour.settingsArchive.title': 'Archive history',
+  'tour.settingsArchive.body': 'Click Archive history to browse every completed and accepted task.',
+  'tour.archive.title': 'Archive history',
+  'tour.archive.body': 'Completed and accepted tasks are kept here.',
+  'tour.archiveFolder.title': 'Back to the project folder',
+  'tour.archiveFolder.body': 'Even after a task is done, you can jump back to its project folder from the archive.',
+  'tour.finish.title': "You're ready",
+  'tour.finish.body': "Create tasks, let agents claim and execute them, and come back to confirm when they're done.\n\nYou can reopen this guide anytime from the settings menu.",
 
   'alert.deleteTaskConfirm': 'Delete this task? This cannot be undone (it will also disappear from the archive).',
   'alert.addFailed': 'Failed to create task: {e}',
@@ -118,41 +149,6 @@ const en: Dict = {
   'alert.historyLoadFailed': 'Failed to load history: {e}',
   'alert.deleteFailed': 'Failed to delete: {e}',
   'alert.pickFailed': 'System picker failed: {e}\n\nYou can always type or paste an absolute path directly into the field instead (e.g. /Users/you/Projects/xxx) — no system dialog needed.',
-
-  wizard: {
-    steps: [
-      {
-        title: '① Create a task',
-        blocks: [
-          { type: 'p', text: 'Click "+" in the top bar and fill in:' },
-          { type: 'list', items: ['Title: what the agent should do', 'Workspace folder: type/paste the path, or click "Choose…" to open the system folder dialog', 'Optional: description / tags / due date'] },
-          { type: 'p', text: 'The task lands in the To Do column, ready for an agent to claim.' },
-        ],
-      },
-      {
-        title: '② An agent claims it (the agent does this)',
-        blocks: [
-          { type: 'p', text: 'Tell your agent to self-register and claim via the API:' },
-          { type: 'code', text: 'GET  /api/tasks                     # find the task and its id\nPOST /api/avatars                   # upload an avatar image (multipart file)\nPOST /api/tasks/<id>/claim      # body: {"agentId","name","avatar"}' },
-          { type: 'p', text: "Claim constraints: name is your tool name; avatar must be the agent's own icon image (e.g. Codex uses the Codex icon, Claude Code the Claude Code icon — an uploaded path or an http(s) image URL); placeholders or fabricated paths get a 422. The card then shows the agent avatar at its top right." },
-        ],
-      },
-      {
-        title: '③ Work and status transitions (agent, via API)',
-        blocks: [
-          { type: 'p', text: 'The agent updates status through the API; you just watch the four columns:' },
-          { type: 'list', items: ['POST /api/tasks/<id>/block — flag blocked (optionally with {"reason":"…"})', 'POST /api/tasks/<id>/unblock — resume → In Progress', 'POST /api/tasks/<id>/complete — hand back → Awaiting Confirmation'] },
-        ],
-      },
-      {
-        title: '④ Review and archive',
-        blocks: [
-          { type: 'p', text: 'When a task reaches "Awaiting Confirmation", review it (click the card, or hover it):' },
-          { type: 'list', items: ['Accept → "Accept"; it moves to the Archive (in the settings menu; single and select-all delete)', 'Not good enough → "Request Changes" with feedback; the task returns to In Progress and the agent can read the feedback via the API'] },
-        ],
-      },
-    ],
-  },
 }
 
 export default en

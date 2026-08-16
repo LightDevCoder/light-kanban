@@ -46,7 +46,7 @@ export function Topbar({
         </div>
         <FilterPopover tasks={tasks} agents={agents} filters={filters} onChange={onFilters} />
         <SettingsMenu onOpenGuide={onOpenGuide} onOpenArchive={onOpenArchive} />
-        <button className="create-btn" title={t('topbar.create')} onClick={onCreate}>
+        <button className="create-btn" title={t('topbar.create')} onClick={onCreate} data-tour="create-task">
           +
         </button>
       </div>

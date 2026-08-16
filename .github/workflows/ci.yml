@@ -35,6 +35,10 @@ jobs:
         working-directory: frontend
         run: npm run build
 
+      - name: Frontend unit tests (vitest — product tour logic)
+        working-directory: frontend
+        run: npm test
+
       # The Go binary embeds internal/webui/dist; it must always match the
       # React source in the same commit, or a shipped binary silently keeps
       # the old UI.

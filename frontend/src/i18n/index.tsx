@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
 import zh, { type Dict } from './zh'
 import en from './en'
+import type { I18nKey } from './keys'
 
 export type Lang = 'zh' | 'en'
 
@@ -13,13 +14,10 @@ function detect(): Lang {
   return String(navigator.language || '').toLowerCase().startsWith('zh') ? 'zh' : 'en'
 }
 
-type FlatKey = Exclude<keyof Dict, 'wizard'>
-
 interface I18nCtx {
   lang: Lang
   setLang: (l: Lang) => void
-  t: (key: FlatKey, vars?: Record<string, string | number>) => string
-  wizardSteps: Dict['wizard']['steps']
+  t: (key: I18nKey, vars?: Record<string, string | number>) => string
 }
 
 const Ctx = createContext<I18nCtx | null>(null)
@@ -44,7 +42,6 @@ export function I18nProvider({ children }: { children: ReactNode }) {
         if (vars) for (const k in vars) s = s.replaceAll('{' + k + '}', String(vars[k]))
         return s
       },
-      wizardSteps: dict.wizard.steps,
     }
   }, [lang, setLang])
 

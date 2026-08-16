@@ -16,7 +16,7 @@ export function SettingsMenu({
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      <button className="top-btn" onClick={() => setOpen(!open)} title={t('topbar.settings')}>
+      <button className="top-btn" onClick={() => setOpen(!open)} title={t('topbar.settings')} data-tour="settings">
         <SettingsIcon />
       </button>
       {open && (
@@ -37,6 +37,7 @@ export function SettingsMenu({
           </button>
           <button
             className="menu-item"
+            data-tour="settings-archive"
             onClick={() => {
               setOpen(false)
               onOpenArchive()

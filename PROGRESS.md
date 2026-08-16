@@ -1,16 +1,29 @@
 # PROGRESS — 项目进度与交接记录
 
 > 本文档记录 Light-Kanban 的当前进度、约定、待办与 Mac 迁移指引，供后续维护者快速接上手。
-> 最后更新：2026-08-16（v1.0.3 已发布）
+> 最后更新：2026-08-16（v1.0.4 已实现，等待用户本地验收）
 
 ## 1. 当前状态
 
 - **远端仓库**：https://github.com/LightDevCoder/light-kanban（public，gh 账号 LightDevCoder）
-- **最新发布**：`v1.0.3`（hardening release），4 个平台二进制齐全（tag `v1.0.3` 指向发布时 commit；之后 main 上只有纯维护 commit）
-- **当前工作**：无进行中的 release；v1.0.3 为最新稳定版本，后续改动等待真实使用反馈（不主动规划 v1.0.4）
-- **工作树**：与 origin/main 一致
+- **最新发布**：`v1.0.3`（hardening release），4 个平台二进制齐全（tag `v1.0.3` 指向发布时 commit；不移动、不覆盖）
+- **当前工作**：**v1.0.4 implementation complete — waiting for local acceptance — not released**。v1.0.4 目标：归档历史一键打开项目目录 + 交互式产品导览（替换旧 Wizard）；代码、测试与文档已完成，等用户按 `docs/manual-test-checklist.md` 验收通过并明确说「可以发布」后，再跑 `make cross` 出四平台二进制并发布 `v1.0.4`
+- **工作树**：main 分支（已改动的文件未提交前先本地验证）
 
-## 2. v1.0.2 已实现（已发布）
+## 2. v1.0.4 进行中（实现完成，待验收，未发布）
+
+- **归档历史打开项目目录**：每条归档记录右侧新增文件夹图标（复用 Task Drawer 同款 `FolderIcon` + `openFolder` API，错误提示与抽屉一致，无新后端 API）；点击不改变归档状态、不关闭弹窗；Delete / 全选删除不变
+- **交互式产品导览**（替换旧居中 Wizard Modal，`GuideDialog` 已删除）：
+  - 首次进入在**真实 UI** 上运行：遮罩暗化其余区域、目标控件保持可见可点击（cutout 区域）、箭头 + 白色 coachmark 跟随；跨 Create Task Dialog / Task Drawer / Settings / Archive Dialog 导航
+  - 14 步流程：+ 创建 → workspace 路径（可手输/「选择…」）→ 标题 → 创建 → 精确定位刚创建的任务卡（从新出现的 `data-tour-task-id` 捕获 task.id，绝不误指其他卡片）→ 抽屉 → 抽屉内文件夹 → 状态区（Agent 流转说明）→ 自动关抽屉后指向等你确认列头 → 设置 → 归档历史入口 → 归档弹窗 → 归档文件夹图标（无归档数据时 optional 自动跳过）→ Finish
+  - 定位只依赖稳定 `data-tour="…"` 属性；`getBoundingClientRect` + 自动四向放置 + viewport 钳制；resize/scroll 监听重算；目标滚出视野自动 `scrollIntoView`；目标缺失 3.5–4s 超时（optional 自动跳过 / 核心步骤安全提示可 Next / Exit / create-submit 消失自动回到第一步），永不无限等待
+  - **持久化语义（v1.0.4 关键变更）**：只有完整走到 Finish 才写 `lk-tour-v1-completed=1`（旧 `lk-wizard-seen` 弃用）；Skip / Esc / 刷新 / 关浏览器都不写，下次启动重新自动出现；Settings → Guide 手动重放不清除 completed
+  - 全部文案进 i18n（zh/en 同构）；UI 保持 quiet / dense / grayscale-first（黑色低透明遮罩 + 白色高亮边 + 白面 tooltip + 现有 shadow），无高饱和 onboarding 视觉
+- **前端单测（新接缝）**：Tour 状态逻辑抽为纯函数 `frontend/src/components/ProductTour/logic.ts`（`isTourCompleted` / `resolveStep` / `getNextStep` / `shouldSkipStep` / `targetSelector` / `computePlacement` / `placeTooltip` 等），vitest 37 用例覆盖持久化、步进、缺失跳过、定位选择器约束（禁 nth-child/class/文本）、tooltip 四向放置与 viewport 钳制、步骤 i18n key 双字典完整性；`npm test` 已接入 `make check` 与 CI
+- **版本号**：frontend/package.json + package-lock.json = `1.0.4`；`internal/webui/dist` 随源码同 commit 重新生成
+- **文档**：README / README_CN（导览 + 归档描述）、spec.md（v1.0.4 决策）、manual-test-checklist.md（P/Q/R 三节）+ xlsx 已重新生成
+
+## 2b. v1.0.2 已实现（已发布）
 
 - **前端迁移**：`internal/webui` 的 vanilla JS → `frontend/`（React 18 + TypeScript + Vite + TanStack Query），产物提交在 `internal/webui/dist/`（go:embed，单二进制不变；fresh clone 无需 npm 即可 go build/test）。决策见 `docs/adr/0002-react-frontend.md`
 - **新版看板**：浅色安静顶栏（搜索 / 筛选 / 设置 / +）；四列固定结构、列头 pinned、每列独立滚动、窄屏横向滚动；高密度紧凑卡片（LK-XXXX 短号、右上 18px Agent 头像、workspace basename + 哈希色点、≤2 标签 +N、截止/逾期/卡住 chips、阻碍原因行）
@@ -21,7 +34,7 @@
 - **种子脚本**：`node scripts/seed-demo.cjs`（35 任务 / 3 Agent / 4 workspace，覆盖密度测试与截图场景）
 - 双语 UI（中文 / English）完整保留；5s 轮询保留（TanStack Query refetchInterval）
 
-## 2b. v1.0.3 加固（已发布）
+## 2c. v1.0.3 加固（已发布）
 
 - **默认监听收紧**：默认 `-addr 127.0.0.1:8641`（仅本机；v1 无认证）。LAN agent 场景显式 `-addr :8641` / `0.0.0.0:8641` 才对外。`browserURL` 与默认地址有 `cmd/light-kanban/main_test.go` 微接缝测试
 - **status 过滤补全**：`GET /api/tasks?status=` 支持 `active`（默认）/`todo`/`in_progress`/`blocked`/`awaiting_confirmation`/`archived`；非法值 400。Store `ListTasks` 支持五个状态 token + 空（active 在 HTTP 层映射为空）；合法状态白名单收敛为 `store.ValidStatus` 单点
@@ -50,8 +63,8 @@
 - **Go 工具链**：Mac/Linux 直接系统 Go + Makefile；Windows 先 `source scripts/goenv.ps1`
 - **前端工具链**：`make frontend-install`（npm ci）→ 开发 `make dev-frontend`（Vite :5173 代理 /api 到 :8641）→ 出产物 `make frontend-build`（拷入 `internal/webui/dist` 并随改动提交）
 - **格式化**：`gofmt -l internal cmd scripts`（永远不要 `gofmt -l .`）
-- **提交门禁**：`make check`（重建前端 → dist 同步守卫 → gofmt → vet → test），CI 同款；改动 `frontend/src/` 必须同 commit 提交重新生成的 `internal/webui/dist`
-- **测试纪律（红绿）**：测试跑在两个主接缝 —— HTTP API 与 store 直接层，外加 cmd 包的监听地址微接缝（main_test.go）。改功能先写红用例再实现
+- **提交门禁**：`make check`（重建前端 → 前端单测 vitest → dist 同步守卫 → gofmt → vet → test），CI 同款；改动 `frontend/src/` 必须同 commit 提交重新生成的 `internal/webui/dist`
+- **测试纪律（红绿）**：测试跑在两个 Go 主接缝 —— HTTP API 与 store 直接层，外加 cmd 包的监听地址微接缝（main_test.go）；v1.0.4 起增加前端纯逻辑接缝（`components/ProductTour/logic.ts`，vitest，纳入 make check/CI）。改功能先写红用例再实现
 - **i18n**：`frontend/src/i18n/zh.ts` 是 key 基准，`en.ts` 必须同构（tsc 强制）
 - **跨平台构建**：`make cross`（或 `scripts\cross-build.ps1`）→ `dist/` 四平台二进制；两者都会先构建前端
 - **发布流程**：dist 构建 → `gh release create vN` 附 4 个二进制；`gh auth setup-git` 后 git push 走令牌。**v1.0.2 额外 gate：用户本地验收 + 中英文新截图入库后才允许发布**

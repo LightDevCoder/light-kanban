@@ -18,7 +18,8 @@ See `.scratch/task-board/spec.md` for the full spec, the state machine, and the 
 - **Compact, high-density cards**: short id (`LK-XXXX`), title, the claiming agent's avatar, workspace basename with a color dot, a couple of tags `+N`, and due / overdue / stuck / block-reason signals only when they matter.
 - **Task drawer**: click any card for the full picture in a right-side drawer — view first, edit on demand. This is also where the human acts: **Accept** (archive), **Request Changes** (rejects back to In Progress with feedback the agent can read via the API), **Recycle to To Do** for suspected-stuck tasks, delete, and open the project folder.
 - **Search & filters** in the topbar: match title / description / workspace / tags / agent name, and compose Agent + Workspace + Tag + Status filters — the board updates in place.
-- **Settings menu**: language (中文 / English), the onboarding guide, and the archive history (single / select-all delete).
+- **Settings menu**: language (中文 / English), the guide, and the archive history (single / select-all delete; every entry can open its project folder directly).
+- **Interactive product tour**: on first launch a guided overlay runs on the real UI — it points at the actual controls, you click them, and the tour follows through task creation, the drawer, the settings menu and the archive. Only finishing it marks it done; skip it and it comes back on the next launch, or reopen it anytime from the settings menu.
 - **Bilingual UI** throughout, remembered per browser; the board polls lightly every 5 s (no WebSocket to run).
 
 ## Install & Run (per platform)
@@ -72,7 +73,7 @@ The browser opens automatically; Ctrl+C stops. To allow other machines on the LA
 
 ## Quick Start
 
-Five steps get you from zero to a full loop (the web UI also shows the same guide on first visit — reopen it anytime from the settings menu):
+Five steps get you from zero to a full loop (on first launch the web UI runs an interactive product tour over the real interface — click the highlighted controls and it follows you through task creation, the drawer, settings and the archive; finish it once, or reopen it anytime from the settings menu):
 
 1. **Start the service**: `dist\light-kanban.exe` on Windows (other platforms: `make build && ./dist/light-kanban`), then open http://127.0.0.1:8641. (LAN agents need `-addr :8641` — see above.)
 
@@ -117,7 +118,8 @@ Flags:
 ## Develop
 
 - Go tests run against the HTTP API and the SQLite store (see spec.md's Testing Decisions); `go test ./...` runs the whole suite. The committed `internal/webui/dist/` keeps this green on a fresh clone — no npm needed for backend work.
-- **Pre-commit gate: `make check`** — rebuilds the frontend, fails if the committed `internal/webui/dist/` is out of sync with `frontend/src/`, then runs gofmt / `go vet` / `go test`. CI (`.github/workflows/ci.yml`) runs the same checks on every push to main and every PR.
+- The product tour's state and geometry logic is pure and unit-tested with vitest: `cd frontend && npm test`.
+- **Pre-commit gate: `make check`** — rebuilds the frontend, runs the frontend unit tests, fails if the committed `internal/webui/dist/` is out of sync with `frontend/src/`, then runs gofmt / `go vet` / `go test`. CI (`.github/workflows/ci.yml`) runs the same checks on every push to main and every PR.
 - `make run` starts the Go backend with its loopback-only default; `make run-lan` is the explicit LAN variant (binds all interfaces) for testing remote agents.
 - The web UI is a React 18 + TypeScript + Vite app in `frontend/` (ADR-0002): `make frontend-install` once, `make dev-frontend` for the Vite dev server (proxies `/api` to a Go backend on :8641), `make frontend-build` to stage the production bundle into `internal/webui/dist/`.
 - `make cross` (or `scripts/cross-build.ps1` on Windows) produces the release binaries under `dist/`: linux (amd64), darwin (amd64 + arm64), windows (amd64) — both build the frontend first.

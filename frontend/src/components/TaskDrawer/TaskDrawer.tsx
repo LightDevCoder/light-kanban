@@ -101,11 +101,11 @@ export function TaskDrawer({
   return (
     <>
       <div className="drawer-backdrop" onClick={onClose} />
-      <aside className="drawer">
+      <aside className="drawer" data-tour="task-drawer">
         <div className="drawer-head">
           <span className="drawer-id">{shortId(task.id)}</span>
           <span style={{ flex: 1 }} />
-          <button className="icon-btn" title={t('drawer.close')} onClick={onClose}>
+          <button className="icon-btn" title={t('drawer.close')} onClick={onClose} data-tour="drawer-close">
             <CloseIcon />
           </button>
         </div>
@@ -120,7 +120,7 @@ export function TaskDrawer({
             <div className="drawer-body">
               <h2 className="drawer-title">{task.title}</h2>
 
-              <div className="field">
+              <div className="field" data-tour="task-status">
                 <div className="field-label">{t('drawer.status')}</div>
                 <div className="field-value">
                   <span className="status-pill">
@@ -157,6 +157,7 @@ export function TaskDrawer({
                     <button
                       className="icon-btn"
                       title={t('card.openFolder')}
+                      data-tour="open-folder"
                       onClick={() => openFolder(task.workspacePath).catch(opFailed)}
                     >
                       <FolderIcon />

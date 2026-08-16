@@ -7,7 +7,8 @@ import { KanbanBoard } from './components/KanbanBoard/KanbanBoard'
 import { TaskDrawer } from './components/TaskDrawer/TaskDrawer'
 import { CreateTaskDialog } from './components/CreateTaskDialog/CreateTaskDialog'
 import { ArchiveDialog } from './components/ArchiveDialog/ArchiveDialog'
-import { GuideDialog, wizardSeen } from './components/GuideDialog/GuideDialog'
+import { ProductTour } from './components/ProductTour/ProductTour'
+import { isTourCompleted } from './components/ProductTour/logic'
 
 export default function App() {
   const tasksQ = useTasks()
@@ -20,7 +21,7 @@ export default function App() {
   const [rejectOnOpen, setRejectOnOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [archiveOpen, setArchiveOpen] = useState(false)
-  const [guideOpen, setGuideOpen] = useState(() => !wizardSeen())
+  const [guideOpen, setGuideOpen] = useState(() => !isTourCompleted())
 
   const tasks = tasksQ.data ?? []
   const agents = agentsQ.data ?? []
@@ -71,7 +72,7 @@ export default function App() {
       )}
       {createOpen && <CreateTaskDialog onClose={() => setCreateOpen(false)} />}
       {archiveOpen && <ArchiveDialog onClose={() => setArchiveOpen(false)} />}
-      {guideOpen && <GuideDialog onClose={() => setGuideOpen(false)} />}
+      {guideOpen && <ProductTour onExit={() => setGuideOpen(false)} />}
     </div>
   )
 }

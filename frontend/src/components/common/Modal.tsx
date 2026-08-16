@@ -4,10 +4,13 @@ import { useEffect, type ReactNode } from 'react'
 export function Modal({
   onClose,
   className,
+  dataTour,
   children,
 }: {
   onClose: () => void
   className?: string
+  /** Stable marker for the interactive product tour (data-tour attribute). */
+  dataTour?: string
   children: ReactNode
 }) {
   useEffect(() => {
@@ -25,7 +28,9 @@ export function Modal({
         if (e.target === e.currentTarget) onClose()
       }}
     >
-      <div className={className ? `modal ${className}` : 'modal'}>{children}</div>
+      <div className={className ? `modal ${className}` : 'modal'} data-tour={dataTour}>
+        {children}
+      </div>
     </div>
   )
 }

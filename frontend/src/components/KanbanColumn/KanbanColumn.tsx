@@ -21,7 +21,10 @@ export function KanbanColumn({
 
   return (
     <section className="column">
-      <header className="column-header">
+      <header
+        className="column-header"
+        data-tour={status === 'awaiting_confirmation' ? 'review-column' : undefined}
+      >
         <span className={`dot dot-${status}`} />
         <span className="column-title">{t(`col.${status}`)}</span>
         <span className="column-count">{tasks.length}</span>

@@ -16,9 +16,9 @@ A single-binary Go kanban board: a human queues tasks (each card points at a wor
 - **Toolchain gotcha (Windows)**: Go is not on PATH. Source `scripts/goenv.ps1` first (PowerShell; it points GOROOT/GOPATH/GOCACHE at `.tools/`). macOS/Linux: `brew install go`, then use the `Makefile`.
 - **Run**: `make build && ./dist/light-kanban` (Windows: `.\dist\light-kanban.exe`) → http://127.0.0.1:8641. The default `-addr 127.0.0.1:8641` binds loopback only (no auth in v1); to let LAN agents connect, run explicitly with `-addr :8641` or `-addr 0.0.0.0:8641`.
 - **Frontend dev**: `make frontend-install` once, then `make dev-frontend` (Vite on :5173, proxies `/api` to a Go backend on :8641). Production staging: `make frontend-build` rebuilds and copies `frontend/dist` → `internal/webui/dist` (commit the result with your change).
-- **Test**: `go test ./...` — tests live at the two agreed seams: HTTP API (`internal/api/api_test.go`) and the store (`internal/store/store_test.go`), plus a tiny cmd seam (`cmd/light-kanban/main_test.go`) pinning the listen-address/startup-URL contract. The committed `internal/webui/dist` keeps these green on a fresh clone without npm.
+- **Test**: `go test ./...` — tests live at the two agreed Go seams: HTTP API (`internal/api/api_test.go`) and the store (`internal/store/store_test.go`), plus a tiny cmd seam (`cmd/light-kanban/main_test.go`) pinning the listen-address/startup-URL contract. v1.0.4 adds a frontend pure-logic seam: the product tour's decision logic (`frontend/src/components/ProductTour/logic.ts` + `steps.ts`) is unit-tested with vitest (`cd frontend && npm test`). The committed `internal/webui/dist` keeps the Go tests green on a fresh clone without npm.
 - **Vet / format**: `go vet ./...`; `gofmt -l internal cmd scripts` (never `gofmt -l .` — `.tools/` is the vendored toolchain).
-- **Pre-commit gate**: `make check` — rebuilds the frontend, verifies the committed `internal/webui/dist` matches the source, then runs gofmt / vet / tests. CI (`.github/workflows/ci.yml`) runs the same checks on every push to main and every PR.
+- **Pre-commit gate**: `make check` — rebuilds the frontend, runs the frontend unit tests, verifies the committed `internal/webui/dist` matches the source, then runs gofmt / vet / tests. CI (`.github/workflows/ci.yml`) runs the same checks on every push to main and every PR.
 - **Cross-compile**: `make cross` (or `scripts\cross-build.ps1`) → `dist/` binaries: linux (amd64), darwin (amd64 + arm64), windows (amd64). Both build the frontend first.
 - **Demo data**: `node scripts/seed-demo.cjs` seeds a running board (35 tasks / 3 agents) for density checks and screenshots.
 - **Data**: SQLite at `-db kanban.db` (default, working directory); `:memory:` accepted. Uploaded agent avatars live in `-avatars avatars` (default) and are served from `/api/avatars/*`.
@@ -28,7 +28,7 @@ A single-binary Go kanban board: a human queues tasks (each card points at a wor
 - **State machine is the contract**: todo / in_progress / blocked / awaiting_confirmation / archived. The UI never offers free-form moves or drag-and-drop; the human corrects state via the drawer's edit mode.
 - **Agent actions stay API-only**: claim/block/unblock/complete/recycle have no UI buttons. Human UI actions: create / edit / delete / accept (archive) / request changes (reject with feedback) / recycle.
 - **i18n is dual-source**: `frontend/src/i18n/zh.ts` is the key schema; `en.ts` must stay structurally identical (tsc enforces it).
-- **Red-green discipline**: new behavior starts with a failing test at one of the two seams.
+- **Red-green discipline**: new behavior starts with a failing test at one of the agreed seams (Go: HTTP API / store / cmd; frontend: the ProductTour pure-logic module).
 - **Embedded dist ships with its source**: every change to `frontend/src/` must commit the regenerated `internal/webui/dist/` in the same commit (`make frontend-build`, then verify with `make check`) — otherwise the shipped binary silently keeps the old UI.
 
 ## Agent skills
