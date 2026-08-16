@@ -22,6 +22,9 @@ export default function App() {
   const [createOpen, setCreateOpen] = useState(false)
   const [archiveOpen, setArchiveOpen] = useState(false)
   const [guideOpen, setGuideOpen] = useState(() => !isTourCompleted())
+  // Task id captured from the create mutation result, so the running tour
+  // can track the exact card instead of guessing from the DOM.
+  const [tourCreatedId, setTourCreatedId] = useState<string | null>(null)
 
   const tasks = tasksQ.data ?? []
   const agents = agentsQ.data ?? []
@@ -51,7 +54,12 @@ export default function App() {
         onFilters={setFilters}
         connected={connected}
         onCreate={() => setCreateOpen(true)}
-        onOpenGuide={() => setGuideOpen(true)}
+        onOpenGuide={() => {
+          // Manual replay always starts fresh — a stale id from an earlier
+          // run must never satisfy the new run's created-task step.
+          setTourCreatedId(null)
+          setGuideOpen(true)
+        }}
         onOpenArchive={() => setArchiveOpen(true)}
       />
       <KanbanBoard
@@ -70,9 +78,16 @@ export default function App() {
           onClose={() => setSelectedId(null)}
         />
       )}
-      {createOpen && <CreateTaskDialog onClose={() => setCreateOpen(false)} />}
+      {createOpen && (
+        <CreateTaskDialog
+          onClose={() => setCreateOpen(false)}
+          onCreated={(task) => setTourCreatedId(task.id)}
+        />
+      )}
       {archiveOpen && <ArchiveDialog onClose={() => setArchiveOpen(false)} />}
-      {guideOpen && <ProductTour onExit={() => setGuideOpen(false)} />}
+      {guideOpen && (
+        <ProductTour createdTaskId={tourCreatedId} onExit={() => setGuideOpen(false)} />
+      )}
     </div>
   )
 }

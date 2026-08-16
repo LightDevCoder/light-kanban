@@ -1,7 +1,10 @@
 // Pure, DOM-free logic for the interactive product tour. Everything here is
 // unit-tested (logic.test.ts / steps.test.ts); the ProductTour component is
 // a thin DOM glue around it. Keep this module free of React and browser
-// globals so the tests run under plain Node.
+// globals so the tests run under plain Node. (The I18nKey import is
+// type-only — erased at runtime.)
+
+import type { I18nKey } from '../../i18n/keys'
 
 export const TOUR_STORAGE_KEY = 'lk-tour-v1-completed'
 
@@ -15,8 +18,8 @@ export interface TourStep {
   target?: string
   /** Region that stays clickable (defaults to the target). */
   cutout?: string
-  titleKey: string
-  bodyKey: string
+  titleKey: I18nKey
+  bodyKey: I18nKey
   placement?: TourPlacement
   advance: TourAdvance
   /** For 'target-input': the input inside the target to watch (defaults to the target itself). */
@@ -104,6 +107,11 @@ export function targetSelector(step: TourStep, ctx: TourCtx): string | null {
     return raw.replaceAll(CREATED_TOKEN, id)
   }
   return raw
+}
+
+/** Exact card selector for a task created during the tour. */
+export function createdTaskSelector(id: string): string {
+  return `[data-tour-task-id="${id.replaceAll('"', '')}"]`
 }
 
 /** Selector for the clickable region (cutout); defaults to the target. */

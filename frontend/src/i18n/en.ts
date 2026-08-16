@@ -99,6 +99,7 @@ const en: Dict = {
   'archive.delete': 'Delete',
   'archive.deleteOneConfirm': 'Delete this history entry? This cannot be undone.',
   'archive.deleteManyConfirm': 'Delete the {n} selected history entries? This cannot be undone.',
+  'archive.openFolder': 'Open project folder',
 
   'pick.choose': 'Choose…',
   'pick.chooseTitle': 'Open the system folder dialog on the server machine',

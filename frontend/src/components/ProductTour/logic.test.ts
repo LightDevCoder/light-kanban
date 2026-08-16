@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   TOUR_STORAGE_KEY,
   computePlacement,
+  createdTaskSelector,
   cutoutSelector,
   getNextStep,
   isLastStep,
@@ -20,8 +21,8 @@ import {
 const step = (p: Partial<TourStep> = {}): TourStep => ({
   id: 'a',
   target: '[data-tour="a"]',
-  titleKey: 'tour.a.title',
-  bodyKey: 'tour.a.body',
+  titleKey: 'tour.skip',
+  bodyKey: 'tour.next',
   advance: 'next-button',
   ...p,
 })
@@ -121,6 +122,16 @@ describe('targetSelector', () => {
 
   it('returns null when the step has no target', () => {
     expect(targetSelector(step({ target: undefined }), {})).toBeNull()
+  })
+})
+
+describe('createdTaskSelector', () => {
+  it('builds the exact card selector for a created task id', () => {
+    expect(createdTaskSelector('abc-123')).toBe('[data-tour-task-id="abc-123"]')
+  })
+
+  it('never lets a quote escape the selector', () => {
+    expect(createdTaskSelector('a"b')).toBe('[data-tour-task-id="ab"]')
   })
 })
 

@@ -98,6 +98,7 @@ const zh = {
   'archive.delete': '删除',
   'archive.deleteOneConfirm': '确定删除该条历史记录？此操作不可恢复。',
   'archive.deleteManyConfirm': '确定删除选中的 {n} 条历史记录？此操作不可恢复。',
+  'archive.openFolder': '打开项目目录',
 
   'pick.choose': '选择…',
   'pick.chooseTitle': '调起服务器所在电脑的系统文件夹窗口',

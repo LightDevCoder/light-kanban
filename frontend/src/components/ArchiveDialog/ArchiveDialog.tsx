@@ -99,7 +99,7 @@ export function ArchiveDialog({ onClose }: { onClose: () => void }) {
                 <button
                   type="button"
                   className="icon-btn"
-                  title={t('card.openFolder')}
+                  title={t('archive.openFolder')}
                   data-tour="archive-open-folder"
                   onClick={() =>
                     openFolder(task.workspacePath).catch((e) =>

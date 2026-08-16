@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useI18n } from '../../i18n'
 import {
   computePlacement,
+  createdTaskSelector,
   cutoutSelector,
   isLastStep,
   markTourCompleted,
@@ -13,7 +14,6 @@ import {
   type TourCtx,
 } from './logic'
 import { TOUR_STEPS } from './steps'
-import type { I18nKey } from '../../i18n/keys'
 
 // The interactive product tour: an overlay on the REAL UI. The current
 // target stays visible and clickable inside a cutout; everything else is
@@ -27,7 +27,43 @@ interface Box {
   cutoutRect: DOMRect | null
 }
 
-export function ProductTour({ onExit }: { onExit: () => void }) {
+interface CoachmarkProps {
+  label: string
+  title: string
+  body: string
+  closeTitle: string
+  onClose: () => void
+  actions: ReactNode
+  className?: string
+  style?: React.CSSProperties
+  innerRef?: React.Ref<HTMLDivElement>
+}
+
+// Shared coachmark chrome: step counter + close, title, body, actions.
+function Coachmark({ label, title, body, closeTitle, onClose, actions, className, style, innerRef }: CoachmarkProps) {
+  return (
+    <div className={className ? `tour-tooltip ${className}` : 'tour-tooltip'} style={style} ref={innerRef}>
+      <div className="tour-tooltip-head">
+        <span className="tour-step">{label}</span>
+        <button type="button" className="tour-close" onClick={onClose} title={closeTitle}>
+          ×
+        </button>
+      </div>
+      <h3>{title}</h3>
+      <p>{body}</p>
+      <div className="tour-actions">{actions}</div>
+    </div>
+  )
+}
+
+export function ProductTour({
+  createdTaskId,
+  onExit,
+}: {
+  /** Task id captured from the create mutation result (preferred over DOM sniffing). */
+  createdTaskId?: string | null
+  onExit: () => void
+}) {
   const { t } = useI18n()
   const [index, setIndex] = useState(0)
   const [ctx, setCtx] = useState<TourCtx>({ createdTaskId: null })
@@ -39,6 +75,7 @@ export function ProductTour({ onExit }: { onExit: () => void }) {
 
   const step = resolveStep(TOUR_STEPS, index)
   const last = isLastStep(TOUR_STEPS, index)
+  const knownId = createdTaskId ?? ctx.createdTaskId
 
   const goNext = useCallback(() => {
     setIndex((i) => (i < TOUR_STEPS.length - 1 ? i + 1 : i))
@@ -84,11 +121,13 @@ export function ProductTour({ onExit }: { onExit: () => void }) {
       goNext()
     }
 
-    const sel = targetSelector(s, ctx)
-    const cutoutSel = cutoutSelector(s, ctx)
+    const sel = targetSelector(s, { createdTaskId: knownId })
+    const cutoutSel = cutoutSelector(s, { createdTaskId: knownId })
 
-    // target-appear steps advance when a NEW data-tour-task-id shows up
-    // (the task created during the tour), so we snapshot the existing ids.
+    // target-appear steps advance when the task created during the tour
+    // shows up. Preferred: the id captured from the create mutation result
+    // (exact selector, no false positives). Fallback: snapshot existing
+    // data-tour-task-id values and advance on the first new one.
     const seenIds = new Set<string>()
     if (s.advance === 'target-appear') {
       document.querySelectorAll('[data-tour-task-id]').forEach((n) => {
@@ -124,13 +163,20 @@ export function ProductTour({ onExit }: { onExit: () => void }) {
       if (!alive) return
 
       if (s.advance === 'target-appear') {
-        const nodes = document.querySelectorAll('[data-tour-task-id]')
-        for (const n of nodes) {
-          const id = n.getAttribute('data-tour-task-id')
-          if (id && !seenIds.has(id)) {
-            setCtx({ createdTaskId: id })
+        if (createdTaskId) {
+          if (document.querySelector(createdTaskSelector(createdTaskId))) {
             advanceOnce()
             return
+          }
+        } else {
+          const nodes = document.querySelectorAll('[data-tour-task-id]')
+          for (const n of nodes) {
+            const id = n.getAttribute('data-tour-task-id')
+            if (id && !seenIds.has(id)) {
+              setCtx({ createdTaskId: id })
+              advanceOnce()
+              return
+            }
           }
         }
       }
@@ -209,7 +255,7 @@ export function ProductTour({ onExit }: { onExit: () => void }) {
       window.removeEventListener('resize', onResize)
       document.removeEventListener('click', onClick, true)
     }
-  }, [index, ctx, goNext, goTo])
+  }, [index, ctx, createdTaskId, knownId, goNext, goTo])
 
   // Esc = unexpected exit: never marks completion.
   useEffect(() => {
@@ -259,8 +305,10 @@ export function ProductTour({ onExit }: { onExit: () => void }) {
     return { left: pos.left + size.width - 5, top: pos.top + s.offset - 6 }
   }
 
-  const titleText = showMissing ? t('tour.missingTitle') : t(step.titleKey as I18nKey)
-  const bodyText = showMissing ? t('tour.missingBody') : t(step.bodyKey as I18nKey)
+  const titleText = showMissing ? t('tour.missingTitle') : t(step.titleKey)
+  const bodyText = showMissing ? t('tour.missingBody') : t(step.bodyKey)
+  const stepLabel = t('tour.step', { current: index + 1, total: TOUR_STEPS.length })
+  const skipTitle = t('tour.skip')
 
   const arrowPos = arrowStyle(pos)
 
@@ -298,59 +346,56 @@ export function ProductTour({ onExit }: { onExit: () => void }) {
       {arrowPos && <div className="tour-arrow" style={arrowPos} />}
 
       {centered || showMissing ? (
-        <div className="tour-tooltip tour-tooltip-center">
-          <div className="tour-tooltip-head">
-            <span className="tour-step">
-              {t('tour.step', { current: index + 1, total: TOUR_STEPS.length })}
-            </span>
-            <button type="button" className="tour-close" onClick={skip} title={t('tour.skip')}>
-              ×
-            </button>
-          </div>
-          <h3>{titleText}</h3>
-          <p>{bodyText}</p>
-          <div className="tour-actions">
-            <button type="button" className="btn sm" onClick={skip}>
-              {t('tour.skip')}
-            </button>
-            {showMissing ? (
-              <button type="button" className="btn primary sm" onClick={goNext}>
-                {t('tour.next')}
+        <Coachmark
+          className="tour-tooltip-center"
+          label={stepLabel}
+          title={titleText}
+          body={bodyText}
+          closeTitle={skipTitle}
+          onClose={skip}
+          actions={
+            <>
+              <button type="button" className="btn sm" onClick={skip}>
+                {skipTitle}
               </button>
-            ) : (
-              <button type="button" className="btn primary sm" onClick={finish}>
-                {t('tour.finish')}
-              </button>
-            )}
-          </div>
-        </div>
+              {showMissing ? (
+                <button type="button" className="btn primary sm" onClick={goNext}>
+                  {t('tour.next')}
+                </button>
+              ) : (
+                <button type="button" className="btn primary sm" onClick={finish}>
+                  {t('tour.finish')}
+                </button>
+              )}
+            </>
+          }
+        />
       ) : pos ? (
-        <div className="tour-tooltip" ref={tooltipRef} style={{ left: pos.left, top: pos.top }}>
-          <div className="tour-tooltip-head">
-            <span className="tour-step">
-              {t('tour.step', { current: index + 1, total: TOUR_STEPS.length })}
-            </span>
-            <button type="button" className="tour-close" onClick={skip} title={t('tour.skip')}>
-              ×
-            </button>
-          </div>
-          <h3>{t(step.titleKey as I18nKey)}</h3>
-          <p>{t(step.bodyKey as I18nKey)}</p>
-          <div className="tour-actions">
-            <button type="button" className="btn sm" onClick={skip}>
-              {t('tour.skip')}
-            </button>
-            {step.advance === 'next-button' ? (
-              <button type="button" className="btn primary sm" onClick={last ? finish : goNext}>
-                {last ? t('tour.finish') : t('tour.next')}
+        <Coachmark
+          innerRef={tooltipRef}
+          style={{ left: pos.left, top: pos.top }}
+          label={stepLabel}
+          title={t(step.titleKey)}
+          body={t(step.bodyKey)}
+          closeTitle={skipTitle}
+          onClose={skip}
+          actions={
+            <>
+              <button type="button" className="btn sm" onClick={skip}>
+                {skipTitle}
               </button>
-            ) : (
-              <span className="tour-hint">
-                {t(step.advance === 'target-input' ? 'tour.hint.input' : 'tour.hint.click')}
-              </span>
-            )}
-          </div>
-        </div>
+              {step.advance === 'next-button' ? (
+                <button type="button" className="btn primary sm" onClick={last ? finish : goNext}>
+                  {last ? t('tour.finish') : t('tour.next')}
+                </button>
+              ) : (
+                <span className="tour-hint">
+                  {t(step.advance === 'target-input' ? 'tour.hint.input' : 'tour.hint.click')}
+                </span>
+              )}
+            </>
+          }
+        />
       ) : null}
     </div>
   )
