@@ -32,11 +32,11 @@
 | macOS Intel | `light-kanban-darwin-amd64` |
 | Linux | `light-kanban-linux-amd64` |
 
-启动后会**自动打开浏览器** http://localhost:8641（不想自动开：加 `-no-open`；换端口：`-addr :9090`）。数据（`kanban.db`、`avatars/`）保存在**你运行命令时所在的文件夹**，建议专门建一个文件夹放二进制和数据。
+启动后会**自动打开浏览器** http://127.0.0.1:8641（不想自动开：加 `-no-open`；换端口：`-addr :9090`）。**默认只监听本机 127.0.0.1**——局域网里没有任何机器能访问（v1 没有认证）。要让**其他电脑**上的 agent 连过来，需要显式用 `-addr :8641`（或 `-addr 0.0.0.0:8641`）启动并放行防火墙端口——这是你的主动选择。数据（`kanban.db`、`avatars/`）保存在**你运行命令时所在的文件夹**，建议专门建一个文件夹放二进制和数据。
 
 ### Windows（可以纯双击）
 
-直接**双击** `light-kanban.exe` → 弹出黑色控制台窗口并自动打开浏览器。首次启动防火墙会询问，选「允许访问」。**关掉控制台窗口 = 停止服务**，再双击一次就是重启。
+直接**双击** `light-kanban.exe` → 弹出黑色控制台窗口并自动打开浏览器。**关掉控制台窗口 = 停止服务**，再双击一次就是重启。只有开启局域网访问（`light-kanban.exe -addr :8641`）时才会触发防火墙询问；纯本机双击使用不需要任何防火墙例外。
 
 ### macOS（终端运行，3 步）
 
@@ -59,7 +59,7 @@
    - 系统设置 → 隐私与安全性 → 找到 light-kanban → 点「仍要打开」；或
    - 终端执行 `xattr -dr com.apple.quarantine light-kanban-darwin-arm64` 后重跑
 
-3. **使用**：浏览器自动打开看板；终端里 **Ctrl+C 停止**，再次运行就是重启。如果 macOS 防火墙询问"允许 incoming connections"，只有需要让**其他电脑**上的 agent 连过来时才选允许（只用本机的话选拒绝也能用）。
+3. **使用**：浏览器自动打开看板；终端里 **Ctrl+C 停止**，再次运行就是重启。默认只监听本机；如果 macOS 防火墙询问"允许 incoming connections"，只有需要让**其他电脑**上的 agent 连过来时才选允许（那种场景还要用 `-addr :8641` 启动——只用本机的话选拒绝也能用）。
 
 ### Linux（终端运行）
 
@@ -74,18 +74,18 @@ chmod +x light-kanban-linux-amd64
 
 跑通「建任务 → agent 接取 → 干活 → 验收归档」只需 5 步（首次打开网页时也有同款引导向导，之后可在右上「设置」菜单里随时重看）：
 
-1. **启动服务**：`dist\light-kanban.exe -addr :8641`（Windows；其他平台 `make build && ./dist/light-kanban`），浏览器打开 http://localhost:8641。
+1. **启动服务**：`dist\light-kanban.exe`（Windows；其他平台 `make build && ./dist/light-kanban`），浏览器打开 http://127.0.0.1:8641。（局域网 agent 需要 `-addr :8641`——见上文。）
 
 2. **添加任务**：点顶栏右侧「**+**」（或待处理列标题右侧的「+」），填标题 + workspace 文件夹路径（直接输入/粘贴路径，或点「选择…」调起系统文件夹窗口），描述 / 标签 / 截止时间可选 → 任务出现在**待处理**列。
 
 3. **Agent 接取**（agent 通过 API 自己注册并接取）：
 
    ```sh
-   curl http://localhost:8641/api/tasks                          # 找到任务和它的 id
-   curl -F "file=@avatar.png" http://localhost:8641/api/avatars   # 上传头像，记下返回的 path
+   curl "http://127.0.0.1:8641/api/tasks?status=todo"             # 找可接的活（只看待处理）
+   curl -F "file=@avatar.png" http://127.0.0.1:8641/api/avatars   # 上传头像，记下返回的 path
    curl -X POST -H "Content-Type: application/json" \
      -d '{"agentId":"my-agent","name":"My Agent","avatar":"/api/avatars/xxx.png"}' \
-     http://localhost:8641/api/tasks/<id>/claim
+     http://127.0.0.1:8641/api/tasks/<id>/claim
    ```
 
    接取约束：`name` 用你的工具名，`avatar` 必须是 **agent 自己的图标图片**（例如 Codex 用 Codex 图标、Claude Code 用 Claude Code 图标——上传后的路径或 http(s) 图片 URL），占位图或伪造路径会被 422 拒绝。接取后卡片右上角显示该 agent 的头像。
@@ -104,13 +104,18 @@ make build            # 构建前端 → 拷入 internal/webui/dist → 编译�
 
 参数：
 
-- `-addr` — 监听地址（默认 `:8641`）
+- `-addr` — 监听地址（默认 `127.0.0.1:8641`，仅本机；用 `:8641` 或 `0.0.0.0:8641` 可向局域网开放）
 - `-db` — SQLite 数据库路径（默认 `kanban.db`；支持 `:memory:`）
 - `-no-open` — 启动时不自动打开浏览器
+
+## API 状态过滤
+
+`GET /api/tasks` 默认返回全部活跃任务。加 `?status=` 可按状态过滤：`active`（等同无过滤）、`todo`、`in_progress`、`blocked`、`awaiting_confirmation`、`archived`（历史）；非法值返回 400。返回列表已按看板规则排好序：待处理最老在前（真正的队列）、处理中 / 遇到阻碍最近活动在前、等你确认等待最久在前、归档最近完成在前。
 
 ## Develop
 
 - 测试跑在 HTTP API 与 SQLite store 两个接缝上（见 spec.md 的 Testing Decisions）；`go test ./...` 跑全量。前端产物已提交在 `internal/webui/dist/`，fresh clone 不装 npm 也能通过。
+- **提交前检查：`make check`**——重建前端，若提交的 `internal/webui/dist/` 与 `frontend/src/` 不同步则失败，然后跑 gofmt / `go vet` / `go test`。CI（`.github/workflows/ci.yml`）对每次 push 到 main 和每个 PR 执行同样检查。
 - 网页 UI 是 `frontend/` 下的 React 18 + TypeScript + Vite 应用（见 ADR-0002）：首次 `make frontend-install`；开发用 `make dev-frontend`（Vite :5173，代理 `/api` 到 :8641 的 Go 后端）；`make frontend-build` 把生产包 staged 到 `internal/webui/dist/`。
 - `make cross`（Windows 用 `scripts/cross-build.ps1`）产出 `dist/` 下的发布二进制：linux (amd64)、darwin (amd64 + arm64)、windows (amd64)——两者都会先构建前端。
 - `node scripts/seed-demo.cjs` 给运行中的看板灌入演示数据（35 任务 / 3 agent），用于密度测试与截图。

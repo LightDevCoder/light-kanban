@@ -140,7 +140,8 @@
 | M2 | 创建任务 | `curl -X POST -d '{"title":"API 测试","workspacePath":"/tmp/x"}' .../api/tasks` | 返回任务 JSON，`"status":"todo"` | |
 | M3 | 接取冲突 | 对同一任务连发两次 claim | 第一次 200，第二次 409 | |
 | M4 | 归档历史查询 | `curl ".../api/tasks?status=archived"` | 返回已归档数组，含 `completedAt` | |
-| M5 | 目录浏览 | `curl ".../api/fs/dirs?path=%2F"`（Mac） | 返回该目录下的子文件夹列表 | |
+| M5 | 打开项目文件夹 | `curl -X POST -d '{"path":"/tmp"}' .../api/fs/open` | 服务器系统文件管理器打开该文件夹，返回 `{"ok":"true"}` | |
+| M5b | 系统文件夹选择器 | `curl -X POST .../api/fs/pick`（仅桌面环境） | 弹出系统文件夹窗口：选择后返回 `{"path":"/..."}`，取消返回 `{"path":""}` | |
 
 ## N. 跨平台（Mac）
 
@@ -150,6 +151,23 @@
 | N2 | Intel Mac | 用 `dist/light-kanban-darwin-amd64` | 同上 | |
 | N3 | Gatekeeper | 首次运行若提示"无法验证开发者" | 右键 → 打开，或 `xattr -dr com.apple.quarantine ./light-kanban-darwin-arm64` 后重试 | |
 
+## O. v1.0.3 加固（网络 / API 过滤 / PATCH 原子性）
+
+| # | 测什么 | 怎么测 | 预期结果 | 结果 | 评论（留给我） |
+|---|--------|--------|----------|------|--------------|
+| O1 | 默认仅本机监听 | 直接 `./dist/light-kanban`（不带 `-addr`） | `curl http://127.0.0.1:8641/api/health` 返回 ok；用本机局域网 IP（`curl http://<LAN-IP>:8641/api/health`）或另一台电脑访问连不上 | |
+| O2 | 显式 LAN 模式 | `./dist/light-kanban -addr :8641` | 局域网内另一台电脑能打开 http://<主机LAN-IP>:8641 | |
+| O3 | 启动自动开浏览器 | 默认启动（不带 `-no-open`） | 浏览器自动打开 http://127.0.0.1:8641 | |
+| O4 | 待处理过滤 | 灌几条不同状态任务后 `curl ".../api/tasks?status=todo"` | 只返回待处理任务 | |
+| O5 | 处理中过滤 | `curl ".../api/tasks?status=in_progress"` | 只返回处理中任务 | |
+| O6 | 遇到阻碍过滤 | `curl ".../api/tasks?status=blocked"` | 只返回遇到阻碍任务 | |
+| O7 | 等你确认过滤 | `curl ".../api/tasks?status=awaiting_confirmation"` | 只返回等你确认任务 | |
+| O8 | active 与非法值 | `curl ".../api/tasks?status=active"` 与 `?status=banana` | active 等同无过滤；banana 返回 400 | |
+| O9 | 待处理 FIFO | 先后创建两个待处理任务，再查 `?status=todo` | 先创建的任务排在前面（最老在前） | |
+| O10 | PATCH 一次修改 | `curl -X PATCH -d '{"title":"新标题","status":"blocked"}' .../api/tasks/<id>` | 返回 200，标题与状态同时生效 | |
+| O11 | PATCH 非法状态无残留 | `curl -X PATCH -d '{"title":"不应保存","status":"banana"}' .../api/tasks/<id>` | 返回 422；再 GET 该任务，标题仍是修改前的值 | |
+| O12 | 归档排序 | 先后归档两条任务后查 `?status=archived` | 最近完成的那条排在最上面 | |
+
 ---
 
-**判读**：A~L 全部 ✅ 即核心功能验收通过；M、N 为抽查项。任一 ❌ 请把编号和现象发回来。
+**判读**：A~L 全部 ✅ 即核心功能验收通过；M、N 为抽查项；O 为 v1.0.3 加固专项。任一 ❌ 请把编号和现象发回来。
