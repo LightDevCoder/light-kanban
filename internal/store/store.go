@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -295,22 +296,34 @@ func (s *Store) GetTask(id string) (Task, error) {
 	return t, err
 }
 
-// ListTasks returns tasks. status "" returns all active (non-archived) tasks,
-// StatusArchived returns the archived history, anything else is an error.
+// ValidStatus reports whether s is one of the five state-machine tokens.
+// It is the single allow-list shared by the store and the HTTP layer so
+// the status vocabulary can never drift apart.
+func ValidStatus(s Status) bool {
+	switch s {
+	case StatusTodo, StatusInProgress, StatusBlocked, StatusAwaitingConfirmation, StatusArchived:
+		return true
+	}
+	return false
+}
+
+// ListTasks returns tasks ordered per the board's column rules. status ""
+// returns all active (non-archived) tasks grouped in column order; any of
+// the five status tokens returns just that column; anything else is an error.
 func (s *Store) ListTasks(status Status) ([]Task, error) {
-	query := `SELECT ` + taskColumns + ` FROM tasks`
-	var order string
-	switch status {
-	case "":
-		query += ` WHERE status != '` + string(StatusArchived) + `'`
-		order = `created_at DESC`
-	case StatusArchived:
-		query += ` WHERE status = '` + string(StatusArchived) + `'`
-		order = `completed_at DESC`
-	default:
+	if status != "" && !ValidStatus(status) {
 		return nil, fmt.Errorf("invalid status filter %q", status)
 	}
-	rows, err := s.db.Query(query + ` ORDER BY ` + order)
+	query := `SELECT ` + taskColumns + ` FROM tasks`
+	var arg any
+	if status == "" {
+		query += ` WHERE status != ?`
+		arg = StatusArchived
+	} else {
+		query += ` WHERE status = ?`
+		arg = status
+	}
+	rows, err := s.db.Query(query, arg)
 	if err != nil {
 		return nil, err
 	}
@@ -323,12 +336,72 @@ func (s *Store) ListTasks(status Status) ([]Task, error) {
 		}
 		tasks = append(tasks, t)
 	}
-	return tasks, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	sortTasks(tasks)
+	return tasks, nil
+}
+
+// statusGroupOrder is the visible board column order (archived excluded;
+// it is its own history view).
+var statusGroupOrder = map[Status]int{
+	StatusTodo:                 0,
+	StatusInProgress:           1,
+	StatusBlocked:              2,
+	StatusAwaitingConfirmation: 3,
+}
+
+// sortTasks applies the column ordering rules (SPEC v1.0.3 Fix 3):
+// todo is a FIFO queue (created oldest-first), in_progress and blocked show
+// the most recent activity first, awaiting_confirmation shows the
+// longest-waiting review first, and archived shows the newest completion
+// first. For the combined active list the columns come first, each keeping
+// its internal rule — the UI splits it into four columns anyway.
+func sortTasks(tasks []Task) {
+	sort.SliceStable(tasks, func(i, j int) bool {
+		a, b := tasks[i], tasks[j]
+		ga, gb := statusGroupOrder[a.Status], statusGroupOrder[b.Status]
+		if ga != gb {
+			return ga < gb
+		}
+		switch a.Status {
+		case StatusTodo:
+			return a.CreatedAt.Before(b.CreatedAt)
+		case StatusInProgress, StatusBlocked:
+			return a.UpdatedAt.After(b.UpdatedAt)
+		case StatusAwaitingConfirmation:
+			return a.UpdatedAt.Before(b.UpdatedAt)
+		case StatusArchived:
+			return timePtrAfter(a.CompletedAt, b.CompletedAt)
+		}
+		return false
+	})
+}
+
+// timePtrAfter reports whether the first timestamp is strictly newer than
+// the second, treating a missing timestamp as oldest (sorts last in
+// newest-first order).
+func timePtrAfter(a, b *time.Time) bool {
+	at, bt := time.Time{}, time.Time{}
+	if a != nil {
+		at = *a
+	}
+	if b != nil {
+		bt = *b
+	}
+	return at.After(bt)
 }
 
 // UpdateTask applies a partial update to human-editable fields only and
 // bumps UpdatedAt.
 func (s *Store) UpdateTask(id string, u TaskUpdate) (Task, error) {
+	return s.UpdateTaskWithStatus(id, u, nil)
+}
+
+// taskUpdateSets builds the SET clauses and arguments for the human-editable
+// field updates shared by UpdateTask and UpdateTaskWithStatus.
+func taskUpdateSets(u TaskUpdate) ([]string, []any, error) {
 	var sets []string
 	var args []any
 	apply := func(col string, v any) {
@@ -348,7 +421,7 @@ func (s *Store) UpdateTask(id string, u TaskUpdate) (Task, error) {
 	if u.Tags != nil {
 		tags, err := encodeTags(*u.Tags)
 		if err != nil {
-			return Task{}, fmt.Errorf("encode tags: %w", err)
+			return nil, nil, fmt.Errorf("encode tags: %w", err)
 		}
 		apply("tags", tags)
 	}
@@ -358,11 +431,41 @@ func (s *Store) UpdateTask(id string, u TaskUpdate) (Task, error) {
 	if u.ClearDueAt {
 		apply("due_at", nil)
 	}
+	return sets, args, nil
+}
+
+// UpdateTaskWithStatus applies field updates and an optional manual status
+// correction in ONE statement, so a PATCH carrying both can never leave a
+// half-applied row behind (SPEC v1.0.3 Fix 4). Status corrections keep the
+// v1.0.2 rules: 待处理 drops the claim, 已归档 records the completion date,
+// leaving 已归档 clears it, and any correction clears block reason and
+// review feedback. Unknown statuses are rejected before anything is written.
+func (s *Store) UpdateTaskWithStatus(id string, u TaskUpdate, status *Status) (Task, error) {
+	sets, args, err := taskUpdateSets(u)
+	if err != nil {
+		return Task{}, err
+	}
+	if status != nil {
+		if !ValidStatus(*status) {
+			return Task{}, fmt.Errorf("invalid status %q", *status)
+		}
+		sets = append(sets, "status = ?", "block_reason = NULL", "review_feedback = NULL")
+		args = append(args, *status)
+		if *status == StatusTodo {
+			sets = append(sets, "claimed_by = NULL")
+		}
+		if *status == StatusArchived {
+			sets = append(sets, "completed_at = ?")
+			args = append(args, formatTime(time.Now().UTC()))
+		} else {
+			sets = append(sets, "completed_at = NULL")
+		}
+	}
 	if len(sets) == 0 {
 		return s.GetTask(id)
 	}
-	apply("updated_at", formatTime(time.Now().UTC()))
-	args = append(args, id)
+	sets = append(sets, "updated_at = ?")
+	args = append(args, formatTime(time.Now().UTC()), id)
 	res, err := s.db.Exec(`UPDATE tasks SET `+strings.Join(sets, ", ")+` WHERE id = ?`, args...)
 	if err != nil {
 		return Task{}, err
@@ -488,33 +591,10 @@ func (s *Store) simpleTransition(id string, from, to Status, extraSet []string, 
 // Moving to 待处理 drops the claim; moving to 已归档 records the completion
 // date; leaving 已归档 clears it. A manual correction is a clean slate:
 // block reason and review feedback are always cleared. Unknown statuses are
-// rejected.
+// rejected. It shares the atomic correction statement with
+// UpdateTaskWithStatus so the semantics can never drift apart.
 func (s *Store) SetStatus(id string, status Status) (Task, error) {
-	switch status {
-	case StatusTodo, StatusInProgress, StatusBlocked, StatusAwaitingConfirmation, StatusArchived:
-	default:
-		return Task{}, fmt.Errorf("invalid status %q", status)
-	}
-	sets := []string{"status = ?", "updated_at = ?", "block_reason = NULL", "review_feedback = NULL"}
-	args := []any{status, formatTime(time.Now().UTC())}
-	if status == StatusTodo {
-		sets = append(sets, "claimed_by = NULL")
-	}
-	if status == StatusArchived {
-		sets = append(sets, "completed_at = ?")
-		args = append(args, formatTime(time.Now().UTC()))
-	} else {
-		sets = append(sets, "completed_at = NULL")
-	}
-	args = append(args, id)
-	res, err := s.db.Exec(`UPDATE tasks SET `+strings.Join(sets, ", ")+` WHERE id = ?`, args...)
-	if err != nil {
-		return Task{}, err
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return Task{}, ErrNotFound
-	}
-	return s.GetTask(id)
+	return s.UpdateTaskWithStatus(id, TaskUpdate{}, &status)
 }
 
 // upsertAgentClaimSQL inserts or updates an agent when an agent claims a

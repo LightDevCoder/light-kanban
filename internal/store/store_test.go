@@ -903,3 +903,246 @@ func TestDeleteTask(t *testing.T) {
 		}
 	}
 }
+
+// v1.0.3 Fix 2: ListTasks accepts every legal status token, so agents can
+// ask the board directly for the work they need (e.g. ?status=todo).
+// Unknown filters must keep failing.
+func TestListTasksFiltersByEveryStatus(t *testing.T) {
+	s := mustOpen(t, filepath.Join(t.TempDir(), "test.db"))
+
+	seed := []struct {
+		id     string
+		status store.Status
+	}{
+		{"todo-1", store.StatusTodo},
+		{"todo-2", store.StatusTodo},
+		{"prog-1", store.StatusInProgress},
+		{"blk-1", store.StatusBlocked},
+		{"await-1", store.StatusAwaitingConfirmation},
+		{"arch-1", store.StatusArchived},
+	}
+	for _, tc := range seed {
+		created := time.Date(2026, 8, 1, 9, 0, 0, 0, time.UTC)
+		task := store.Task{
+			ID: tc.id, Title: tc.id, WorkspacePath: "w", Status: tc.status,
+			CreatedAt: created, UpdatedAt: created,
+		}
+		if tc.status == store.StatusArchived {
+			done := time.Date(2026, 8, 2, 9, 0, 0, 0, time.UTC)
+			task.CompletedAt = &done
+		}
+		if _, err := s.CreateTask(task); err != nil {
+			t.Fatalf("CreateTask(%s): %v", tc.id, err)
+		}
+	}
+
+	cases := []struct {
+		filter store.Status
+		want   []string
+	}{
+		{"", []string{"todo-1", "todo-2", "prog-1", "blk-1", "await-1"}},
+		{store.StatusTodo, []string{"todo-1", "todo-2"}},
+		{store.StatusInProgress, []string{"prog-1"}},
+		{store.StatusBlocked, []string{"blk-1"}},
+		{store.StatusAwaitingConfirmation, []string{"await-1"}},
+		{store.StatusArchived, []string{"arch-1"}},
+	}
+	for _, c := range cases {
+		got, err := s.ListTasks(c.filter)
+		if err != nil {
+			t.Fatalf("ListTasks(%q): %v", c.filter, err)
+		}
+		if len(got) != len(c.want) {
+			t.Fatalf("ListTasks(%q) = %d tasks, want %d", c.filter, len(got), len(c.want))
+		}
+		have := map[string]bool{}
+		for _, task := range got {
+			have[task.ID] = true
+		}
+		for _, id := range c.want {
+			if !have[id] {
+				t.Errorf("ListTasks(%q) missing %s", c.filter, id)
+			}
+		}
+	}
+
+	if _, err := s.ListTasks("banana"); err == nil {
+		t.Error("ListTasks(banana) should error")
+	}
+}
+
+// v1.0.3 Fix 3: each column orders by its own rule — todo is a FIFO queue
+// (oldest first), active work shows the most recent activity first, review
+// work shows the longest-waiting first, archived shows newest completions
+// first. Timestamps are explicit, so no timing flakiness.
+func TestListTasksOrdering(t *testing.T) {
+	s := mustOpen(t, filepath.Join(t.TempDir(), "test.db"))
+
+	// seed returns a task creator that stamps the given times exactly.
+	seed := func(id string, status store.Status, created, updated time.Time, completed *time.Time) {
+		t.Helper()
+		task := store.Task{
+			ID: id, Title: id, WorkspacePath: "w", Status: status,
+			CreatedAt: created, UpdatedAt: updated, CompletedAt: completed,
+		}
+		if _, err := s.CreateTask(task); err != nil {
+			t.Fatalf("CreateTask(%s): %v", id, err)
+		}
+	}
+	at := func(day, hour int) time.Time {
+		return time.Date(2026, 8, day, hour, 0, 0, 0, time.UTC)
+	}
+
+	// todo: created oldest-first (queue fairness).
+	seed("todo-new", store.StatusTodo, at(2, 12), at(2, 12), nil)
+	seed("todo-old", store.StatusTodo, at(1, 9), at(1, 9), nil)
+	// in_progress / blocked: latest activity first.
+	seed("prog-old", store.StatusInProgress, at(1, 9), at(1, 9), nil)
+	seed("prog-new", store.StatusInProgress, at(2, 12), at(3, 15), nil)
+	seed("blk-old", store.StatusBlocked, at(1, 9), at(1, 9), nil)
+	seed("blk-new", store.StatusBlocked, at(2, 12), at(4, 18), nil)
+	// awaiting_confirmation: longest-waiting first.
+	seed("await-new", store.StatusAwaitingConfirmation, at(2, 12), at(5, 20), nil)
+	seed("await-old", store.StatusAwaitingConfirmation, at(1, 9), at(3, 10), nil)
+	// archived: newest completion first.
+	doneOld := at(6, 9)
+	doneNew := at(7, 15)
+	seed("arch-old", store.StatusArchived, at(1, 9), at(1, 9), &doneOld)
+	seed("arch-new", store.StatusArchived, at(2, 12), at(2, 12), &doneNew)
+
+	expectOrder := func(t *testing.T, filter store.Status, want ...string) {
+		t.Helper()
+		got, err := s.ListTasks(filter)
+		if err != nil {
+			t.Fatalf("ListTasks(%q): %v", filter, err)
+		}
+		var ids []string
+		for _, task := range got {
+			ids = append(ids, task.ID)
+		}
+		if fmt.Sprint(ids) != fmt.Sprint(want) {
+			t.Errorf("ListTasks(%q) order = %v, want %v", filter, ids, want)
+		}
+	}
+
+	expectOrder(t, store.StatusTodo, "todo-old", "todo-new")
+	expectOrder(t, store.StatusInProgress, "prog-new", "prog-old")
+	expectOrder(t, store.StatusBlocked, "blk-new", "blk-old")
+	expectOrder(t, store.StatusAwaitingConfirmation, "await-old", "await-new")
+	expectOrder(t, store.StatusArchived, "arch-new", "arch-old")
+
+	// The combined active list groups by column order and keeps each
+	// column's internal rule (the UI splits it into four columns anyway).
+	expectOrder(t, "",
+		"todo-old", "todo-new",
+		"prog-new", "prog-old",
+		"blk-new", "blk-old",
+		"await-old", "await-new")
+}
+
+// v1.0.3 Fix 4: field updates plus a manual status correction must land
+// atomically — either both apply or neither does. The invalid-status case
+// is the observable no-partial-write proof: the field must not persist.
+func TestUpdateTaskWithStatusAtomic(t *testing.T) {
+	s := mustOpen(t, filepath.Join(t.TempDir(), "test.db"))
+	task, err := s.CreateTask(store.Task{ID: "t1", Title: "Original", WorkspacePath: "w"})
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+
+	// Full success: title and status change together.
+	title := "Renamed"
+	blocked := store.StatusBlocked
+	got, err := s.UpdateTaskWithStatus(task.ID, store.TaskUpdate{Title: &title}, &blocked)
+	if err != nil {
+		t.Fatalf("UpdateTaskWithStatus: %v", err)
+	}
+	if got.Title != "Renamed" || got.Status != store.StatusBlocked {
+		t.Errorf("got title=%q status=%q, want Renamed + blocked", got.Title, got.Status)
+	}
+
+	// Invalid status: the call fails and the field edit must NOT persist.
+	badTitle := "Should not persist"
+	bad := store.Status("banana")
+	if _, err := s.UpdateTaskWithStatus(task.ID, store.TaskUpdate{Title: &badTitle}, &bad); err == nil {
+		t.Fatal("UpdateTaskWithStatus(banana) should error")
+	}
+	after, err := s.GetTask(task.ID)
+	if err != nil {
+		t.Fatalf("GetTask: %v", err)
+	}
+	if after.Title != "Renamed" {
+		t.Errorf("title after failed update = %q, want Renamed (no partial write)", after.Title)
+	}
+	if after.Status != store.StatusBlocked {
+		t.Errorf("status after failed update = %q, want blocked (no partial write)", after.Status)
+	}
+}
+
+// v1.0.3 Fix 4: the combined field+status path must keep the v1.0.2 manual
+// correction semantics — 待处理 drops the claim, 已归档 records the
+// completion date, leaving 已归档 clears it, and every correction clears
+// block reason and review feedback.
+func TestUpdateTaskWithStatusKeepsCorrectionSemantics(t *testing.T) {
+	s := mustOpen(t, filepath.Join(t.TempDir(), "test.db"))
+	task, err := s.CreateTask(store.Task{ID: "t1", Title: "Work", WorkspacePath: "w"})
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	if _, err := s.Claim(task.ID, store.Agent{ID: "a1"}); err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	reason := "missing dependency"
+	if _, err := s.Block(task.ID, &reason); err != nil {
+		t.Fatalf("Block: %v", err)
+	}
+
+	// → todo: drops the claim and clears the block reason.
+	todo := store.StatusTodo
+	got, err := s.UpdateTaskWithStatus(task.ID, store.TaskUpdate{}, &todo)
+	if err != nil {
+		t.Fatalf("UpdateTaskWithStatus(todo): %v", err)
+	}
+	if got.ClaimedBy != nil {
+		t.Errorf("ClaimedBy = %v, want nil after manual move to todo", got.ClaimedBy)
+	}
+	if got.BlockReason != nil {
+		t.Errorf("BlockReason = %v, want nil after status correction", got.BlockReason)
+	}
+
+	// → archived: records the completion date.
+	archived := store.StatusArchived
+	got, err = s.UpdateTaskWithStatus(task.ID, store.TaskUpdate{}, &archived)
+	if err != nil {
+		t.Fatalf("UpdateTaskWithStatus(archived): %v", err)
+	}
+	if got.CompletedAt == nil {
+		t.Error("CompletedAt = nil, want recorded after manual move to archived")
+	}
+
+	// Leaving archived clears it again.
+	got, err = s.UpdateTaskWithStatus(task.ID, store.TaskUpdate{}, &todo)
+	if err != nil {
+		t.Fatalf("UpdateTaskWithStatus(todo again): %v", err)
+	}
+	if got.CompletedAt != nil {
+		t.Errorf("CompletedAt = %v, want nil after leaving archived", got.CompletedAt)
+	}
+
+	// Review feedback is cleared by a later correction.
+	if _, err := s.SetStatus(task.ID, store.StatusAwaitingConfirmation); err != nil {
+		t.Fatalf("SetStatus: %v", err)
+	}
+	feedback := "redo the layout"
+	if _, err := s.Reject(task.ID, &feedback); err != nil {
+		t.Fatalf("Reject: %v", err)
+	}
+	blk := store.StatusBlocked
+	got, err = s.UpdateTaskWithStatus(task.ID, store.TaskUpdate{}, &blk)
+	if err != nil {
+		t.Fatalf("UpdateTaskWithStatus(blocked): %v", err)
+	}
+	if got.ReviewFeedback != nil {
+		t.Errorf("ReviewFeedback = %v, want nil after status correction", got.ReviewFeedback)
+	}
+}

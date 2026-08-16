@@ -15,8 +15,13 @@ import (
 	"light-kanban/internal/webui"
 )
 
+// defaultAddr binds the board to loopback only: v1 has no authentication,
+// so the API (tasks, status changes, folder open) must not be reachable
+// from the LAN unless the operator explicitly asks for it via -addr.
+const defaultAddr = "127.0.0.1:8641"
+
 func main() {
-	addr := flag.String("addr", ":8641", "listen address")
+	addr := flag.String("addr", defaultAddr, "listen address")
 	dbPath := flag.String("db", "kanban.db", "SQLite database path (:memory: accepted)")
 	avatarsDir := flag.String("avatars", "avatars", "directory for uploaded agent avatar images")
 	noOpen := flag.Bool("no-open", false, "do not open the browser on startup")
@@ -43,12 +48,18 @@ func main() {
 	log.Fatal(http.Serve(ln, handler))
 }
 
-// browserURL converts the listen address into a URL the local browser can open.
+// browserURL converts the listen address into a URL the local browser can
+// open. All-interfaces bindings (:8641, 0.0.0.0:8641) open on localhost —
+// a browser cannot dial 0.0.0.0.
 func browserURL(addr string) string {
-	if strings.HasPrefix(addr, ":") {
-		return "http://localhost" + addr
+	host := addr
+	switch {
+	case strings.HasPrefix(addr, ":"):
+		host = "localhost" + addr
+	case strings.HasPrefix(addr, "0.0.0.0"):
+		host = "localhost" + strings.TrimPrefix(addr, "0.0.0.0")
 	}
-	return "http://" + addr
+	return "http://" + host
 }
 
 // openBrowser best-effort opens the default browser on the server machine so a

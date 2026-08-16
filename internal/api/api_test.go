@@ -1075,3 +1075,147 @@ func TestRecycleOrphan(t *testing.T) {
 		t.Errorf("recycle on missing task status = %d, want 404", status)
 	}
 }
+
+// v1.0.3 Fix 2: GET /api/tasks?status=<s> accepts every legal status token
+// (agents can fetch ?status=todo instead of filtering the full list), keeps
+// active as the default, and rejects unknown tokens with 400.
+func TestListTasksStatusFilters(t *testing.T) {
+	ts := newServer(t)
+
+	statusByTitle := map[string]string{
+		"todo-task":        "todo",
+		"progress-task":    "in_progress",
+		"blocked-task":     "blocked",
+		"awaiting-task":    "awaiting_confirmation",
+		"archived-task":    "archived",
+		"second-todo-task": "todo",
+	}
+	for title := range statusByTitle {
+		code, raw := do(t, http.MethodPost, ts.URL+"/api/tasks",
+			`{"title":"`+title+`","workspacePath":"/ws"}`)
+		if code != http.StatusCreated {
+			t.Fatalf("create %s: status %d body %s", title, code, raw)
+		}
+		task := decodeTask(t, raw)
+		want := statusByTitle[title]
+		if want == "todo" {
+			continue
+		}
+		code, raw = do(t, http.MethodPatch, ts.URL+"/api/tasks/"+task["id"].(string),
+			`{"status":"`+want+`"}`)
+		if code != http.StatusOK {
+			t.Fatalf("move %s to %s: status %d body %s", title, want, code, raw)
+		}
+	}
+
+	fetch := func(t *testing.T, filter string) []map[string]any {
+		t.Helper()
+		url := ts.URL + "/api/tasks"
+		if filter != "" {
+			url += "?status=" + filter
+		}
+		code, raw := do(t, http.MethodGet, url, "")
+		if code != http.StatusOK {
+			t.Fatalf("GET %s: status %d body %s", url, code, raw)
+		}
+		var tasks []map[string]any
+		if err := json.Unmarshal(raw, &tasks); err != nil {
+			t.Fatalf("decode list %q: %v", raw, err)
+		}
+		return tasks
+	}
+	idsOf := func(tasks []map[string]any, status string) []string {
+		var ids []string
+		for _, task := range tasks {
+			if task["status"] == status {
+				ids = append(ids, task["id"].(string))
+			}
+		}
+		return ids
+	}
+
+	cases := []struct {
+		filter string
+		want   map[string]int // status → expected count
+	}{
+		{"", map[string]int{"todo": 2, "in_progress": 1, "blocked": 1, "awaiting_confirmation": 1, "archived": 0}},
+		{"active", map[string]int{"todo": 2, "in_progress": 1, "blocked": 1, "awaiting_confirmation": 1, "archived": 0}},
+		{"todo", map[string]int{"todo": 2}},
+		{"in_progress", map[string]int{"in_progress": 1}},
+		{"blocked", map[string]int{"blocked": 1}},
+		{"awaiting_confirmation", map[string]int{"awaiting_confirmation": 1}},
+		{"archived", map[string]int{"archived": 1}},
+	}
+	for _, c := range cases {
+		wantTotal := 0
+		for _, n := range c.want {
+			wantTotal += n
+		}
+		got := fetch(t, c.filter)
+		if len(got) != wantTotal {
+			t.Fatalf("?status=%q returned %d tasks, want %d", c.filter, len(got), wantTotal)
+		}
+		for status, n := range c.want {
+			if ids := idsOf(got, status); len(ids) != n {
+				t.Errorf("?status=%q has %d %s tasks, want %d", c.filter, len(ids), status, n)
+			}
+		}
+	}
+
+	code, raw := do(t, http.MethodGet, ts.URL+"/api/tasks?status=banana", "")
+	if code != http.StatusBadRequest {
+		t.Fatalf("?status=banana status = %d, want 400 (body %s)", code, raw)
+	}
+}
+
+// v1.0.3 Fix 4: PATCH with fields + status lands atomically through the
+// API. A rejected status must not leave the field edit behind.
+func TestPatchFieldsAndStatusAtomic(t *testing.T) {
+	ts := newServer(t)
+
+	code, raw := do(t, http.MethodPost, ts.URL+"/api/tasks",
+		`{"title":"Original","workspacePath":"/ws"}`)
+	if code != http.StatusCreated {
+		t.Fatalf("create: status %d body %s", code, raw)
+	}
+	task := decodeTask(t, raw)
+	id := task["id"].(string)
+
+	// Success: both edits land in one response.
+	code, raw = do(t, http.MethodPatch, ts.URL+"/api/tasks/"+id,
+		`{"title":"Renamed","status":"blocked"}`)
+	if code != http.StatusOK {
+		t.Fatalf("patch: status %d body %s", code, raw)
+	}
+	got := decodeTask(t, raw)
+	if got["title"] != "Renamed" || got["status"] != "blocked" {
+		t.Fatalf("patch result = %v, want title=Renamed status=blocked", got)
+	}
+
+	// Invalid status: 422 and NOTHING persists — no partial write.
+	code, raw = do(t, http.MethodPatch, ts.URL+"/api/tasks/"+id,
+		`{"title":"Should not persist","status":"banana"}`)
+	if code != http.StatusUnprocessableEntity {
+		t.Fatalf("patch with banana: status %d, want 422 (body %s)", code, raw)
+	}
+	code, raw = do(t, http.MethodGet, ts.URL+"/api/tasks", "")
+	if code != http.StatusOK {
+		t.Fatalf("list: status %d body %s", code, raw)
+	}
+	var tasks []map[string]any
+	if err := json.Unmarshal(raw, &tasks); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
+	for _, candidate := range tasks {
+		if candidate["id"] == id {
+			if candidate["title"] != "Renamed" {
+				t.Errorf("title after rejected patch = %v, want Renamed (no partial write)", candidate["title"])
+			}
+			if candidate["status"] != "blocked" {
+				t.Errorf("status after rejected patch = %v, want blocked (no partial write)", candidate["status"])
+			}
+			return
+		}
+	}
+	t.Fatal("patched task missing from list")
+}

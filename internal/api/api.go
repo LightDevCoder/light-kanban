@@ -141,9 +141,7 @@ func handleListTasks(s *store.Store) http.HandlerFunc {
 		if status == "active" {
 			status = ""
 		}
-		switch store.Status(status) {
-		case "", store.StatusArchived:
-		default:
+		if status != "" && !store.ValidStatus(store.Status(status)) {
 			writeError(w, http.StatusBadRequest, "invalid status filter: "+status)
 			return
 		}
@@ -299,22 +297,17 @@ func handlePatchTask(s *store.Store) http.HandlerFunc {
 		}
 		if req.Status != nil {
 			status := strings.TrimSpace(*req.Status)
-			switch store.Status(status) {
-			case store.StatusTodo, store.StatusInProgress, store.StatusBlocked,
-				store.StatusAwaitingConfirmation, store.StatusArchived:
-			default:
+			if !store.ValidStatus(store.Status(status)) {
 				writeError(w, http.StatusUnprocessableEntity, "invalid status: "+status)
 				return
 			}
-			// Fields first (if any), then the status correction on top.
-			task, err := s.UpdateTask(id, u)
+			// Fields and the manual status correction land in one atomic
+			// store statement (SPEC v1.0.3 Fix 4): a rejected request can
+			// never leave a half-applied edit behind.
+			st := store.Status(status)
+			task, err := s.UpdateTaskWithStatus(id, u, &st)
 			if err != nil {
 				writeStoreTransitionError(w, err, "update")
-				return
-			}
-			task, err = s.SetStatus(id, store.Status(status))
-			if err != nil {
-				writeStoreTransitionError(w, err, "set status")
 				return
 			}
 			writeJSON(w, http.StatusOK, task)
