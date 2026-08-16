@@ -343,13 +343,18 @@ func (s *Store) ListTasks(status Status) ([]Task, error) {
 	return tasks, nil
 }
 
-// statusGroupOrder is the visible board column order (archived excluded;
-// it is its own history view).
-var statusGroupOrder = map[Status]int{
-	StatusTodo:                 0,
-	StatusInProgress:           1,
-	StatusBlocked:              2,
-	StatusAwaitingConfirmation: 3,
+// boardColumns is the visible column order (archived excluded; it is its
+// own history view). sortTasks uses the slice index as the group order, so
+// column order has exactly one source of truth.
+var boardColumns = []Status{StatusTodo, StatusInProgress, StatusBlocked, StatusAwaitingConfirmation}
+
+func columnIndex(s Status) int {
+	for i, c := range boardColumns {
+		if c == s {
+			return i
+		}
+	}
+	return len(boardColumns) // archived (and anything unknown) sorts last
 }
 
 // sortTasks applies the column ordering rules (SPEC v1.0.3 Fix 3):
@@ -361,9 +366,9 @@ var statusGroupOrder = map[Status]int{
 func sortTasks(tasks []Task) {
 	sort.SliceStable(tasks, func(i, j int) bool {
 		a, b := tasks[i], tasks[j]
-		ga, gb := statusGroupOrder[a.Status], statusGroupOrder[b.Status]
-		if ga != gb {
-			return ga < gb
+		gi, gj := columnIndex(a.Status), columnIndex(b.Status)
+		if gi != gj {
+			return gi < gj
 		}
 		switch a.Status {
 		case StatusTodo:
