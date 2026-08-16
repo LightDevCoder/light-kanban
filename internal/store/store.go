@@ -363,6 +363,12 @@ func columnIndex(s Status) int {
 // longest-waiting review first, and archived shows the newest completion
 // first. For the combined active list the columns come first, each keeping
 // its internal rule — the UI splits it into four columns anyway.
+//
+// A rejected task re-enters awaiting_confirmation through a fresh complete(),
+// which rewrites UpdatedAt — so each review round is a new wait and the
+// re-delivered work correctly joins the back of the review queue. Archived
+// rows always carry completed_at (Archive and SetStatus write it); a
+// hand-edited row without one sorts last instead of crashing the sort.
 func sortTasks(tasks []Task) {
 	sort.SliceStable(tasks, func(i, j int) bool {
 		a, b := tasks[i], tasks[j]
