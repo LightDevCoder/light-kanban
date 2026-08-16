@@ -1046,6 +1046,67 @@ func TestPreconfigureAgent(t *testing.T) {
 	}
 }
 
+// Block accepts an optional {"reason": …} so the human sees why a card is
+// stuck; reject accepts an optional {"feedback": …} the agent reads back on
+// the task. Empty bodies stay fully backward compatible.
+func TestBlockReasonAndRejectFeedback(t *testing.T) {
+	ts := newServer(t)
+	id := createTask(t, ts, "A")
+	do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/claim", goodClaim)
+
+	// Empty-body block still works, no reason attached.
+	status, raw := do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/block", "")
+	if status != http.StatusOK {
+		t.Fatalf("block status = %d, want 200 (body: %s)", status, raw)
+	}
+	if decodeTask(t, raw)["blockReason"] != nil {
+		t.Errorf("blockReason = %s, want null", raw)
+	}
+	if status, raw = do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/unblock", ""); status != http.StatusOK {
+		t.Fatalf("unblock status = %d (body: %s)", status, raw)
+	}
+
+	// Block with a reason: readable on the task, cleared by unblock.
+	status, raw = do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/block",
+		`{"reason":"GitHub authentication required"}`)
+	if status != http.StatusOK {
+		t.Fatalf("block with reason status = %d, want 200 (body: %s)", status, raw)
+	}
+	if decodeTask(t, raw)["blockReason"] != "GitHub authentication required" {
+		t.Errorf("blockReason = %s", raw)
+	}
+	status, raw = do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/unblock", "")
+	if status != http.StatusOK || decodeTask(t, raw)["blockReason"] != nil {
+		t.Errorf("unblock should clear blockReason = %d %s", status, raw)
+	}
+
+	// Reject with feedback: the task back in 处理中 carries the feedback, so
+	// the agent picks it up via GET /api/tasks.
+	do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/complete", "")
+	status, raw = do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/reject",
+		`{"feedback":"README_CN quick start out of sync"}`)
+	if status != http.StatusOK {
+		t.Fatalf("reject status = %d, want 200 (body: %s)", status, raw)
+	}
+	task := decodeTask(t, raw)
+	if task["status"] != "in_progress" || task["reviewFeedback"] != "README_CN quick start out of sync" {
+		t.Errorf("reject with feedback = %s", raw)
+	}
+
+	// Empty-body reject still works and leaves reviewFeedback null.
+	do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/complete", "")
+	status, raw = do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/reject", "")
+	if status != http.StatusOK || decodeTask(t, raw)["reviewFeedback"] != nil {
+		t.Errorf("empty reject = %d %s, want 200 with null reviewFeedback", status, raw)
+	}
+
+	// Malformed JSON on an otherwise-optional body is still a 400.
+	status, raw = do(t, http.MethodPost, ts.URL+"/api/tasks/"+id+"/block", `{broken`)
+	if status != http.StatusBadRequest {
+		t.Errorf("malformed block body status = %d, want 400 (body: %s)", status, raw)
+	}
+}
+
 // Issue 07: the human recycles a 处理中 task back to 待处理 in one action;
 // the recycled task is claimable again.
 func TestRecycleOrphan(t *testing.T) {

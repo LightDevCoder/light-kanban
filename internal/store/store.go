@@ -49,6 +49,12 @@ type Task struct {
 	UpdatedAt     time.Time  `json:"updatedAt"`
 	CompletedAt   *time.Time `json:"completedAt"`
 	DueAt         *time.Time `json:"dueAt"`
+	// BlockReason is set when an agent blocks the task (处理中 → 遇到阻碍)
+	// so the human sees why it is stuck; cleared on unblock.
+	BlockReason *string `json:"blockReason"`
+	// ReviewFeedback is set when the human rejects a review (等你确认 →
+	// 处理中) so the agent can read what to fix; cleared on complete.
+	ReviewFeedback *string `json:"reviewFeedback"`
 }
 
 // Agent is an autonomous program that claims and works tasks.
@@ -88,7 +94,9 @@ CREATE TABLE IF NOT EXISTS tasks (
 	created_at    TEXT NOT NULL,
 	updated_at    TEXT NOT NULL,
 	completed_at  TEXT,
-	due_at        TEXT
+	due_at        TEXT,
+	block_reason  TEXT,
+	review_feedback TEXT
 );
 CREATE TABLE IF NOT EXISTS agents (
 	id     TEXT PRIMARY KEY,
@@ -125,34 +133,47 @@ func Open(path string) (*Store, error) {
 
 // migrate brings databases created before later schema additions up to date.
 func (s *Store) migrate() error {
-	rows, err := s.db.Query(`PRAGMA table_info(agents)`)
+	for _, m := range []struct{ table, column, alter string }{
+		{"agents", "configured", `ALTER TABLE agents ADD COLUMN configured INTEGER NOT NULL DEFAULT 0`},
+		{"tasks", "block_reason", `ALTER TABLE tasks ADD COLUMN block_reason TEXT`},
+		{"tasks", "review_feedback", `ALTER TABLE tasks ADD COLUMN review_feedback TEXT`},
+	} {
+		if err := s.ensureColumn(m.table, m.column, m.alter); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ensureColumn adds a column when a database created before it existed is
+// opened. Fresh databases already have every column from the schema above.
+func (s *Store) ensureColumn(table, column, alter string) error {
+	rows, err := s.db.Query(`PRAGMA table_info(` + table + `)`)
 	if err != nil {
 		return err
 	}
-	hasConfigured := false
+	has := false
 	for rows.Next() {
-		var cid int
+		var cid, notnull, pk int
 		var name, typ string
-		var notnull, pk int
 		var dflt any
 		if err := rows.Scan(&cid, &name, &typ, &notnull, &dflt, &pk); err != nil {
 			rows.Close()
 			return err
 		}
-		if name == "configured" {
-			hasConfigured = true
+		if name == column {
+			has = true
 		}
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
 		return err
 	}
-	if !hasConfigured {
-		if _, err := s.db.Exec(`ALTER TABLE agents ADD COLUMN configured INTEGER NOT NULL DEFAULT 0`); err != nil {
-			return err
-		}
+	if has {
+		return nil
 	}
-	return nil
+	_, err = s.db.Exec(alter)
+	return err
 }
 
 // Close releases the underlying database.
@@ -161,7 +182,7 @@ func (s *Store) Close() error { return s.db.Close() }
 // Ping verifies the database is reachable.
 func (s *Store) Ping(ctx context.Context) error { return s.db.PingContext(ctx) }
 
-const taskColumns = `id, title, workspace_path, description, status, claimed_by, tags, created_at, updated_at, completed_at, due_at`
+const taskColumns = `id, title, workspace_path, description, status, claimed_by, tags, created_at, updated_at, completed_at, due_at, block_reason, review_feedback`
 
 type rowScanner interface {
 	Scan(dest ...any) error
@@ -169,23 +190,27 @@ type rowScanner interface {
 
 func scanTask(row rowScanner) (Task, error) {
 	var (
-		t           Task
-		desc        sql.NullString
-		claimedBy   sql.NullString
-		status      string
-		tags        string
-		createdAt   string
-		updatedAt   string
-		completedAt sql.NullString
-		dueAt       sql.NullString
-		err         error
+		t              Task
+		desc           sql.NullString
+		claimedBy      sql.NullString
+		status         string
+		tags           string
+		createdAt      string
+		updatedAt      string
+		completedAt    sql.NullString
+		dueAt          sql.NullString
+		blockReason    sql.NullString
+		reviewFeedback sql.NullString
+		err            error
 	)
-	if err = row.Scan(&t.ID, &t.Title, &t.WorkspacePath, &desc, &status, &claimedBy, &tags, &createdAt, &updatedAt, &completedAt, &dueAt); err != nil {
+	if err = row.Scan(&t.ID, &t.Title, &t.WorkspacePath, &desc, &status, &claimedBy, &tags, &createdAt, &updatedAt, &completedAt, &dueAt, &blockReason, &reviewFeedback); err != nil {
 		return Task{}, err
 	}
 	t.Status = Status(status)
 	t.Description = nullStringPtr(desc)
 	t.ClaimedBy = nullStringPtr(claimedBy)
+	t.BlockReason = nullStringPtr(blockReason)
+	t.ReviewFeedback = nullStringPtr(reviewFeedback)
 	if err := json.Unmarshal([]byte(tags), &t.Tags); err != nil || t.Tags == nil {
 		t.Tags = []string{}
 	}
@@ -406,19 +431,21 @@ func (s *Store) Claim(id string, a Agent) (Task, error) {
 	return s.GetTask(id)
 }
 
-// Block moves a task 处理中 → 遇到阻碍.
-func (s *Store) Block(id string) (Task, error) {
-	return s.simpleTransition(id, StatusInProgress, StatusBlocked, nil, nil)
+// Block moves a task 处理中 → 遇到阻碍, recording an optional reason so the
+// human can see why the agent is stuck.
+func (s *Store) Block(id string, reason *string) (Task, error) {
+	return s.simpleTransition(id, StatusInProgress, StatusBlocked, []string{"block_reason = ?"}, []any{strPtr(reason)})
 }
 
-// Unblock moves a task 遇到阻碍 → 处理中.
+// Unblock moves a task 遇到阻碍 → 处理中 and clears the block reason.
 func (s *Store) Unblock(id string) (Task, error) {
-	return s.simpleTransition(id, StatusBlocked, StatusInProgress, nil, nil)
+	return s.simpleTransition(id, StatusBlocked, StatusInProgress, []string{"block_reason = NULL"}, nil)
 }
 
-// Complete moves a task 处理中 → 等你确认.
+// Complete moves a task 处理中 → 等你确认 and clears any review feedback
+// from a previous rejection (the new delivery is reviewed fresh).
 func (s *Store) Complete(id string) (Task, error) {
-	return s.simpleTransition(id, StatusInProgress, StatusAwaitingConfirmation, nil, nil)
+	return s.simpleTransition(id, StatusInProgress, StatusAwaitingConfirmation, []string{"review_feedback = NULL"}, nil)
 }
 
 // Archive moves a task 等你确认 → 已归档, recording the completion date.
@@ -427,9 +454,10 @@ func (s *Store) Archive(id string) (Task, error) {
 	return s.simpleTransition(id, StatusAwaitingConfirmation, StatusArchived, []string{"completed_at = ?"}, []any{now})
 }
 
-// Reject moves a task 等你确认 → 处理中, back to the same agent.
-func (s *Store) Reject(id string) (Task, error) {
-	return s.simpleTransition(id, StatusAwaitingConfirmation, StatusInProgress, nil, nil)
+// Reject moves a task 等你确认 → 处理中, back to the same agent, with an
+// optional feedback message the agent reads through the task list.
+func (s *Store) Reject(id string, feedback *string) (Task, error) {
+	return s.simpleTransition(id, StatusAwaitingConfirmation, StatusInProgress, []string{"review_feedback = ?"}, []any{strPtr(feedback)})
 }
 
 // Recycle moves a task 处理中 → 待处理 and drops the claim, so any agent can
@@ -458,14 +486,16 @@ func (s *Store) simpleTransition(id string, from, to Status, extraSet []string, 
 // SetStatus lets the human correct a card's status directly (user story 6:
 // "manually move or edit a card's status"), bypassing the transition guards.
 // Moving to 待处理 drops the claim; moving to 已归档 records the completion
-// date; leaving 已归档 clears it. Unknown statuses are rejected.
+// date; leaving 已归档 clears it. A manual correction is a clean slate:
+// block reason and review feedback are always cleared. Unknown statuses are
+// rejected.
 func (s *Store) SetStatus(id string, status Status) (Task, error) {
 	switch status {
 	case StatusTodo, StatusInProgress, StatusBlocked, StatusAwaitingConfirmation, StatusArchived:
 	default:
 		return Task{}, fmt.Errorf("invalid status %q", status)
 	}
-	sets := []string{"status = ?", "updated_at = ?"}
+	sets := []string{"status = ?", "updated_at = ?", "block_reason = NULL", "review_feedback = NULL"}
 	args := []any{status, formatTime(time.Now().UTC())}
 	if status == StatusTodo {
 		sets = append(sets, "claimed_by = NULL")

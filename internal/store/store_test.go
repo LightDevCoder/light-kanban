@@ -396,7 +396,7 @@ func TestBlockUnblockComplete(t *testing.T) {
 		t.Fatalf("Claim: %v", err)
 	}
 
-	blocked, err := s.Block(task.ID)
+	blocked, err := s.Block(task.ID, nil)
 	if err != nil {
 		t.Fatalf("Block: %v", err)
 	}
@@ -406,7 +406,7 @@ func TestBlockUnblockComplete(t *testing.T) {
 
 	// Wrong-status calls conflict: blocking an already-blocked task, and
 	// completing a blocked task.
-	if _, err := s.Block(task.ID); !errors.Is(err, store.ErrConflict) {
+	if _, err := s.Block(task.ID, nil); !errors.Is(err, store.ErrConflict) {
 		t.Errorf("Block on blocked task = %v, want ErrConflict", err)
 	}
 	if _, err := s.Complete(task.ID); !errors.Is(err, store.ErrConflict) {
@@ -442,7 +442,7 @@ func TestBlockUnblockComplete(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateTask: %v", err)
 	}
-	if _, err := s.Block(task2.ID); !errors.Is(err, store.ErrConflict) {
+	if _, err := s.Block(task2.ID, nil); !errors.Is(err, store.ErrConflict) {
 		t.Errorf("Block on todo task = %v, want ErrConflict", err)
 	}
 	if _, err := s.Complete(task2.ID); !errors.Is(err, store.ErrConflict) {
@@ -511,7 +511,7 @@ func TestArchiveRejectHistory(t *testing.T) {
 
 	// Reject returns the task to the same agent, without a completion date.
 	finish("rej")
-	rejected, err := s.Reject("rej")
+	rejected, err := s.Reject("rej", nil)
 	if err != nil {
 		t.Fatalf("Reject: %v", err)
 	}
@@ -524,7 +524,7 @@ func TestArchiveRejectHistory(t *testing.T) {
 	if rejected.CompletedAt != nil {
 		t.Errorf("CompletedAt = %v, want nil after reject", rejected.CompletedAt)
 	}
-	if _, err := s.Reject("rej"); !errors.Is(err, store.ErrConflict) {
+	if _, err := s.Reject("rej", nil); !errors.Is(err, store.ErrConflict) {
 		t.Errorf("Reject on in-progress task = %v, want ErrConflict", err)
 	}
 	if _, err := s.Archive("missing"); !errors.Is(err, store.ErrNotFound) {
@@ -620,6 +620,82 @@ func TestUpdateTaskFields(t *testing.T) {
 
 func strPtr2(s string) *string { return &s }
 
+// Block carries an optional human-readable reason (the card shows why the
+// agent is stuck); reject carries optional review feedback the agent reads
+// back through the task list. Unblock clears the reason, complete clears
+// the feedback, and a manual SetStatus correction clears both.
+func TestBlockReasonAndReviewFeedback(t *testing.T) {
+	s := mustOpen(t, filepath.Join(t.TempDir(), "test.db"))
+
+	if _, err := s.CreateTask(store.Task{ID: "t1", Title: "T", WorkspacePath: "w"}); err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	if _, err := s.Claim("t1", store.Agent{ID: "a1", Name: "Alpha"}); err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+
+	// Block without a reason: blockReason stays null.
+	blocked, err := s.Block("t1", nil)
+	if err != nil {
+		t.Fatalf("Block: %v", err)
+	}
+	if blocked.BlockReason != nil {
+		t.Errorf("blockReason = %v, want nil", blocked.BlockReason)
+	}
+	if _, err := s.Unblock("t1"); err != nil {
+		t.Fatalf("Unblock: %v", err)
+	}
+
+	// Block with a reason: visible on the task, cleared by unblock.
+	reason := "GitHub authentication required"
+	blocked, err = s.Block("t1", &reason)
+	if err != nil {
+		t.Fatalf("Block with reason: %v", err)
+	}
+	if blocked.BlockReason == nil || *blocked.BlockReason != reason {
+		t.Errorf("blockReason = %v, want %q", blocked.BlockReason, reason)
+	}
+	unblocked, err := s.Unblock("t1")
+	if err != nil {
+		t.Fatalf("Unblock: %v", err)
+	}
+	if unblocked.BlockReason != nil {
+		t.Errorf("blockReason after unblock = %v, want nil", unblocked.BlockReason)
+	}
+
+	// Reject with feedback: the agent reads it on the task; complete clears it.
+	if _, err := s.Complete("t1"); err != nil {
+		t.Fatalf("Complete: %v", err)
+	}
+	feedback := "README_CN 里的 Quick Start 还没有同步。"
+	rejected, err := s.Reject("t1", &feedback)
+	if err != nil {
+		t.Fatalf("Reject: %v", err)
+	}
+	if rejected.ReviewFeedback == nil || *rejected.ReviewFeedback != feedback {
+		t.Errorf("reviewFeedback = %v, want %q", rejected.ReviewFeedback, feedback)
+	}
+	completed, err := s.Complete("t1")
+	if err != nil {
+		t.Fatalf("Complete after reject: %v", err)
+	}
+	if completed.ReviewFeedback != nil {
+		t.Errorf("reviewFeedback after complete = %v, want nil", completed.ReviewFeedback)
+	}
+
+	// A manual status correction is a clean slate: both fields cleared.
+	if _, err := s.Reject("t1", &feedback); err != nil {
+		t.Fatalf("Reject again: %v", err)
+	}
+	corrected, err := s.SetStatus("t1", store.StatusTodo)
+	if err != nil {
+		t.Fatalf("SetStatus: %v", err)
+	}
+	if corrected.ReviewFeedback != nil || corrected.BlockReason != nil {
+		t.Errorf("SetStatus should clear block/review fields, got %+v", corrected)
+	}
+}
+
 // Issue 06: agents can be pre-configured with id/name/avatar and updated;
 // a missing name defaults to the id.
 func TestUpsertAgentPreconfigures(t *testing.T) {
@@ -706,7 +782,7 @@ func TestRecycleReturnsToTodo(t *testing.T) {
 		status store.Status
 		move   func(id string) error
 	}{
-		{id: "t2", status: store.StatusBlocked, move: func(id string) error { _, err := s.Block(id); return err }},
+		{id: "t2", status: store.StatusBlocked, move: func(id string) error { _, err := s.Block(id, nil); return err }},
 		{id: "t3", status: store.StatusAwaitingConfirmation, move: func(id string) error { _, err := s.Complete(id); return err }},
 		{id: "t4", status: store.StatusArchived, move: func(id string) error {
 			if _, err := s.Complete(id); err != nil {

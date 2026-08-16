@@ -34,11 +34,11 @@ func New(s *store.Store, ui fs.FS, avatarsDir string) http.Handler {
 		r.Patch("/{id}", handlePatchTask(s))
 		r.Delete("/{id}", handleDeleteTask(s))
 		r.Post("/{id}/claim", handleClaim(s, avatarsDir))
-		r.Post("/{id}/block", transitionHandler(s, s.Block, "block"))
+		r.Post("/{id}/block", handleBlock(s))
 		r.Post("/{id}/unblock", transitionHandler(s, s.Unblock, "unblock"))
 		r.Post("/{id}/complete", transitionHandler(s, s.Complete, "complete"))
 		r.Post("/{id}/archive", transitionHandler(s, s.Archive, "archive"))
-		r.Post("/{id}/reject", transitionHandler(s, s.Reject, "reject"))
+		r.Post("/{id}/reject", handleReject(s))
 		r.Post("/{id}/recycle", transitionHandler(s, s.Recycle, "recycle"))
 	})
 	r.Get("/api/agents", handleListAgents(s))
@@ -631,6 +631,58 @@ func defaultPickDir() (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+// decodeOptionalJSON decodes a request body that may legitimately be absent
+// (older agents post empty bodies to block/reject). An empty body is not an
+// error; a present-but-malformed one is.
+func decodeOptionalJSON(r *http.Request, v any) error {
+	err := json.NewDecoder(r.Body).Decode(v)
+	if errors.Is(err, io.EOF) {
+		return nil
+	}
+	return err
+}
+
+// handleBlock implements 处理中 → 遇到阻碍. The body is optional:
+// {"reason": "why the agent is stuck"} — an empty body blocks without one.
+func handleBlock(s *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		var req struct {
+			Reason *string `json:"reason"`
+		}
+		if err := decodeOptionalJSON(r, &req); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid JSON body: "+err.Error())
+			return
+		}
+		task, err := s.Block(id, req.Reason)
+		if writeStoreTransitionError(w, err, "block") {
+			return
+		}
+		writeJSON(w, http.StatusOK, task)
+	}
+}
+
+// handleReject implements 等你确认 → 处理中 (request changes). The body is
+// optional: {"feedback": "what to fix"} — the agent reads it back on the
+// task via GET /api/tasks. An empty body rejects without feedback.
+func handleReject(s *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		var req struct {
+			Feedback *string `json:"feedback"`
+		}
+		if err := decodeOptionalJSON(r, &req); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid JSON body: "+err.Error())
+			return
+		}
+		task, err := s.Reject(id, req.Feedback)
+		if writeStoreTransitionError(w, err, "reject") {
+			return
+		}
+		writeJSON(w, http.StatusOK, task)
+	}
 }
 
 // writeStoreTransitionError maps store errors onto HTTP responses and
