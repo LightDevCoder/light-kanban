@@ -16,8 +16,6 @@ export interface TourStep {
   id: string
   /** data-tour attribute the coachmark anchors at; undefined = centered card. */
   target?: string
-  /** Region that stays clickable (defaults to the target). */
-  cutout?: string
   titleKey: I18nKey
   bodyKey: I18nKey
   placement?: TourPlacement
@@ -114,9 +112,45 @@ export function createdTaskSelector(id: string): string {
   return `[data-tour-task-id="${id.replaceAll('"', '')}"]`
 }
 
-/** Selector for the clickable region (cutout); defaults to the target. */
-export function cutoutSelector(step: TourStep, ctx: TourCtx): string | null {
-  return step.cutout ?? targetSelector(step, ctx)
+// ---------- missing-target bookkeeping (pure) ----------
+
+export interface MissingWatcher {
+  /** Arm the timer if it is neither pending nor already fired. */
+  start(callback: () => void): void
+  /** Cancel any pending timer and allow a fresh start (target reappeared). */
+  reset(): void
+}
+
+type ScheduleFn = (fn: () => void, ms: number) => unknown
+
+/**
+ * One-shot missing-target timer with a fired guard. Once the timeout fires,
+ * further start() calls are no-ops until reset() — this is what stops the
+ * MutationObserver/React render loop from re-arming the timer and instantly
+ * undoing the recovery UI (the "gray screen" bug).
+ */
+export function createMissingWatcher(
+  timeoutMs: number,
+  schedule: ScheduleFn = (fn, ms) => setTimeout(fn, ms),
+  cancel: (handle: unknown) => void = (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
+): MissingWatcher {
+  let handle: unknown | null = null
+  let fired = false
+  return {
+    start(callback) {
+      if (handle != null || fired) return
+      handle = schedule(() => {
+        handle = null
+        fired = true
+        callback()
+      }, timeoutMs)
+    },
+    reset() {
+      if (handle != null) cancel(handle)
+      handle = null
+      fired = false
+    },
+  }
 }
 
 // ---------- tooltip geometry (pure) ----------

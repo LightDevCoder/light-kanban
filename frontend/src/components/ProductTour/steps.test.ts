@@ -18,13 +18,19 @@ describe('tour steps data', () => {
 
   it('targets stable data-tour attributes only (no nth-child / class / text selectors)', () => {
     for (const s of TOUR_STEPS) {
-      for (const sel of [s.target, s.cutout, s.preClick, s.appearSelector]) {
+      for (const sel of [s.target, s.preClick, s.appearSelector]) {
         if (sel == null) continue
         expect(sel, `${s.id}: ${sel}`).toMatch(ATTR_SELECTOR)
       }
       if (s.inputSelector != null) {
         expect(s.inputSelector, `${s.id} inputSelector`).toMatch(/^(input|\[data-tour[-a-z]*(=".*")?\])$/)
       }
+    }
+  })
+
+  it('keeps every step strictly at the highlighted target (no extra clickable regions)', () => {
+    for (const s of TOUR_STEPS) {
+      expect('cutout' in s, `${s.id} has a cutout`).toBe(false)
     }
   })
 
@@ -72,6 +78,16 @@ describe('tour steps data', () => {
   it('restarts the create flow when the submit button disappears', () => {
     const submit = TOUR_STEPS.find((s) => s.id === 'create-submit')
     expect(submit?.onMissingGoTo).toBe('create-task')
+  })
+
+  it('loops back to the task card when the drawer closes mid-tour', () => {
+    const drawer = TOUR_STEPS.find((s) => s.id === 'task-drawer')
+    expect(drawer?.onMissingGoTo).toBe('task-card')
+  })
+
+  it('loops back to the archive menu item when the archive dialog closes', () => {
+    const archive = TOUR_STEPS.find((s) => s.id === 'archive-dialog')
+    expect(archive?.onMissingGoTo).toBe('settings-archive')
   })
 
   it('closes the drawer before pointing at the review column', () => {

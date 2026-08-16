@@ -1,11 +1,12 @@
 import type { TourStep } from './logic'
 
 // The interactive first-run tour. Every step drives the REAL UI: the
-// coachmark anchors at `target` (a stable data-tour attribute), `cutout`
-// marks the region that stays clickable (defaults to the target), and
-// `advance` decides how the user moves on. All visible text lives in the
-// i18n dictionaries (titleKey/bodyKey); the selectors must stay attribute
-// selectors only so small UI tweaks never break the tour.
+// coachmark anchors at `target` (a stable data-tour attribute) and ONLY
+// that highlighted target — plus the coachmark's own Skip/Next buttons —
+// stays clickable; everything else is dimmed and blocked. `advance` decides
+// how the user moves on. All visible text lives in the i18n dictionaries
+// (titleKey/bodyKey); the selectors must stay attribute selectors only so
+// small UI tweaks never break the tour.
 export const TOUR_STEPS: TourStep[] = [
   {
     id: 'create-task',
@@ -17,7 +18,6 @@ export const TOUR_STEPS: TourStep[] = [
   {
     id: 'workspace-path',
     target: '[data-tour="workspace-path"]',
-    cutout: '[data-tour="create-dialog"]',
     titleKey: 'tour.workspacePath.title',
     bodyKey: 'tour.workspacePath.body',
     advance: 'target-input',
@@ -26,7 +26,6 @@ export const TOUR_STEPS: TourStep[] = [
   {
     id: 'task-title',
     target: '[data-tour="task-title"]',
-    cutout: '[data-tour="create-dialog"]',
     titleKey: 'tour.taskTitle.title',
     bodyKey: 'tour.taskTitle.body',
     advance: 'target-input',
@@ -34,7 +33,6 @@ export const TOUR_STEPS: TourStep[] = [
   {
     id: 'create-submit',
     target: '[data-tour="create-submit"]',
-    cutout: '[data-tour="create-dialog"]',
     titleKey: 'tour.createSubmit.title',
     bodyKey: 'tour.createSubmit.body',
     advance: 'target-appear',
@@ -54,11 +52,11 @@ export const TOUR_STEPS: TourStep[] = [
     titleKey: 'tour.taskDrawer.title',
     bodyKey: 'tour.taskDrawer.body',
     advance: 'next-button',
+    onMissingGoTo: 'task-card',
   },
   {
     id: 'open-folder',
     target: '[data-tour="open-folder"]',
-    cutout: '[data-tour="task-drawer"]',
     titleKey: 'tour.openFolder.title',
     bodyKey: 'tour.openFolder.body',
     advance: 'next-button',
@@ -66,7 +64,6 @@ export const TOUR_STEPS: TourStep[] = [
   {
     id: 'task-status',
     target: '[data-tour="task-status"]',
-    cutout: '[data-tour="task-drawer"]',
     titleKey: 'tour.workflow.title',
     bodyKey: 'tour.workflow.body',
     advance: 'next-button',
@@ -99,11 +96,11 @@ export const TOUR_STEPS: TourStep[] = [
     titleKey: 'tour.archive.title',
     bodyKey: 'tour.archive.body',
     advance: 'next-button',
+    onMissingGoTo: 'settings-archive',
   },
   {
     id: 'archive-open-folder',
     target: '[data-tour="archive-open-folder"]',
-    cutout: '[data-tour="archive-dialog"]',
     titleKey: 'tour.archiveFolder.title',
     bodyKey: 'tour.archiveFolder.body',
     advance: 'next-button',

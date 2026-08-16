@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   TOUR_STORAGE_KEY,
   computePlacement,
   createdTaskSelector,
-  cutoutSelector,
+  createMissingWatcher,
   getNextStep,
   isLastStep,
   isTourCompleted,
@@ -135,19 +135,67 @@ describe('createdTaskSelector', () => {
   })
 })
 
-describe('cutoutSelector', () => {
-  it('prefers the explicit cutout region', () => {
-    expect(cutoutSelector(step({ target: '[data-tour="x"]', cutout: '[data-tour="y"]' }), {})).toBe(
-      '[data-tour="y"]',
-    )
+describe('createMissingWatcher', () => {
+  it('fires its callback once after the timeout', () => {
+    vi.useFakeTimers()
+    const watcher = createMissingWatcher(4000)
+    const cb = vi.fn()
+    watcher.start(cb)
+    vi.advanceTimersByTime(3999)
+    expect(cb).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
+    expect(cb).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
   })
 
-  it('falls back to the target selector', () => {
-    expect(cutoutSelector(step({ target: '[data-tour="x"]' }), {})).toBe('[data-tour="x"]')
+  it('ignores duplicate starts while the timer is armed', () => {
+    vi.useFakeTimers()
+    const watcher = createMissingWatcher(4000)
+    const cb = vi.fn()
+    watcher.start(cb)
+    watcher.start(cb)
+    vi.advanceTimersByTime(4000)
+    expect(cb).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
   })
 
-  it('is null for a centered (target-less) step', () => {
-    expect(cutoutSelector(step({ target: undefined }), {})).toBeNull()
+  it('never re-arms after it has fired (gray-screen regression)', () => {
+    vi.useFakeTimers()
+    const watcher = createMissingWatcher(4000)
+    watcher.start(vi.fn())
+    vi.advanceTimersByTime(4000)
+    const cb2 = vi.fn()
+    watcher.start(cb2) // must be a no-op: the step already resolved as missing
+    vi.advanceTimersByTime(12000)
+    expect(cb2).not.toHaveBeenCalled()
+    vi.useRealTimers()
+  })
+
+  it('reset cancels a pending timer and allows a fresh arm', () => {
+    vi.useFakeTimers()
+    const watcher = createMissingWatcher(4000)
+    const cb = vi.fn()
+    watcher.start(cb)
+    watcher.reset()
+    vi.advanceTimersByTime(12000)
+    expect(cb).not.toHaveBeenCalled()
+    watcher.start(cb)
+    vi.advanceTimersByTime(4000)
+    expect(cb).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
+  })
+
+  it('reset after firing allows re-arming (target reappeared, then vanished again)', () => {
+    vi.useFakeTimers()
+    const watcher = createMissingWatcher(4000)
+    watcher.start(vi.fn())
+    vi.advanceTimersByTime(4000)
+    watcher.reset()
+    const cb = vi.fn()
+    watcher.start(cb)
+    vi.advanceTimersByTime(4000)
+    expect(cb).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
   })
 })
 

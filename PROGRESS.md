@@ -14,9 +14,9 @@
 
 - **归档历史打开项目目录**：每条归档记录右侧新增文件夹图标（复用 Task Drawer 同款 `FolderIcon` + `openFolder` API，错误提示与抽屉一致，无新后端 API）；点击不改变归档状态、不关闭弹窗；Delete / 全选删除不变
 - **交互式产品导览**（替换旧居中 Wizard Modal，`GuideDialog` 已删除）：
-  - 首次进入在**真实 UI** 上运行：遮罩暗化其余区域、目标控件保持可见可点击（cutout 区域）、箭头 + 白色 coachmark 跟随；跨 Create Task Dialog / Task Drawer / Settings / Archive Dialog 导航
+  - 首次进入在**真实 UI** 上运行：遮罩暗化其余区域、**只有高亮目标 + coachmark 自身按钮可点**（其余一律拦截，弹窗/菜单无法在导览外被关闭）；箭头 + 白色 coachmark 跟随；跨 Create Task Dialog / Task Drawer / Settings / Archive Dialog 导航
   - 14 步流程：+ 创建 → workspace 路径（可手输/「选择…」）→ 标题 → 创建 → 精确定位刚创建的任务卡（task.id 取自 create mutation 返回结果，精确 `data-tour-task-id` 选择器；无 mutation id 时兜底跟踪新出现的 `data-tour-task-id`，绝不误指其他卡片）→ 抽屉 → 抽屉内文件夹 → 状态区（Agent 流转说明）→ 自动关抽屉后指向等你确认列头 → 设置 → 归档历史入口 → 归档弹窗 → 归档文件夹图标（无归档数据时 optional 自动跳过）→ Finish
-  - 定位只依赖稳定 `data-tour="…"` 属性；`getBoundingClientRect` + 自动四向放置 + viewport 钳制；resize/scroll 监听重算；目标滚出视野自动 `scrollIntoView`；目标缺失 3.5–4s 超时（optional 自动跳过 / 核心步骤安全提示可 Next / Exit / create-submit 消失自动回到第一步），永不无限等待
+  - 定位只依赖稳定 `data-tour="…"` 属性；`getBoundingClientRect` + 自动四向放置 + viewport 钳制；resize/scroll 监听重算；目标滚出视野自动 `scrollIntoView`；目标缺失 3.5–4s 超时（一次性计时器带 fired 防重入守卫——修掉「恢复卡片被 MutationObserver 回环反复撤销」的灰屏 bug，optional 自动跳过 / create-submit 消失自动回到第一步 / 抽屉被关回到任务卡 / 归档弹窗被关回到归档入口 / 其余核心步骤安全提示可 Next / Exit），永不无限等待
   - **持久化语义（v1.0.4 关键变更）**：只有完整走到 Finish 才写 `lk-tour-v1-completed=1`（旧 `lk-wizard-seen` 弃用）；Skip / Esc / 刷新 / 关浏览器都不写，下次启动重新自动出现；Settings → Guide 手动重放不清除 completed
   - 全部文案进 i18n（zh/en 同构）；UI 保持 quiet / dense / grayscale-first（黑色低透明遮罩 + 白色高亮边 + 白面 tooltip + 现有 shadow），无高饱和 onboarding 视觉
 - **前端单测（新接缝）**：Tour 状态逻辑抽为纯函数 `frontend/src/components/ProductTour/logic.ts`（`isTourCompleted` / `resolveStep` / `getNextStep` / `shouldSkipStep` / `targetSelector` / `computePlacement` / `placeTooltip` 等），vitest 37 用例覆盖持久化、步进、缺失跳过、定位选择器约束（禁 nth-child/class/文本）、tooltip 四向放置与 viewport 钳制、步骤 i18n key 双字典完整性；`npm test` 已接入 `make check` 与 CI

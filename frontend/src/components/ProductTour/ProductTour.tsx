@@ -3,7 +3,7 @@ import { useI18n } from '../../i18n'
 import {
   computePlacement,
   createdTaskSelector,
-  cutoutSelector,
+  createMissingWatcher,
   isLastStep,
   markTourCompleted,
   placeTooltip,
@@ -15,16 +15,16 @@ import {
 } from './logic'
 import { TOUR_STEPS } from './steps'
 
-// The interactive product tour: an overlay on the REAL UI. The current
-// target stays visible and clickable inside a cutout; everything else is
-// dimmed and blocked. Steps advance through real interactions (clicks,
-// typed input, newly rendered elements) or an explicit Next button for
-// informational steps. Only Finish writes lk-tour-v1-completed.
+// The interactive product tour: an overlay on the REAL UI. ONLY the current
+// highlighted target — plus the coachmark's own buttons — stays clickable;
+// everything else is dimmed and blocked. Steps advance through real
+// interactions (clicks, typed input, newly rendered elements) or an explicit
+// Next button for informational steps. Only Finish writes
+// lk-tour-v1-completed.
 
 interface Box {
   el: HTMLElement
   rect: DOMRect
-  cutoutRect: DOMRect | null
 }
 
 interface CoachmarkProps {
@@ -122,7 +122,6 @@ export function ProductTour({
     }
 
     const sel = targetSelector(s, { createdTaskId: knownId })
-    const cutoutSel = cutoutSelector(s, { createdTaskId: knownId })
 
     // target-appear steps advance when the task created during the tour
     // shows up. Preferred: the id captured from the create mutation result
@@ -136,28 +135,18 @@ export function ProductTour({
       })
     }
 
-    let missingTimer: number | null = null
-    let inputTimer: number | null = null
-
-    const startMissing = () => {
-      if (missingTimer != null) return
-      setMissing(false)
-      missingTimer = window.setTimeout(() => {
-        missingTimer = null
-        if (!alive) return
-        if (shouldSkipStep(s, true)) advanceOnce()
-        else if (s.onMissingGoTo) goTo(s.onMissingGoTo)
-        else setMissing(true)
-      }, s.timeoutMs ?? 4000)
-    }
+    // One-shot missing-target timer with a fired guard: once it resolves
+    // (skip / goTo / fallback card), further update() calls must not
+    // re-arm it — re-arming + setMissing(false) inside the observer loop
+    // is what used to leave the screen permanently dimmed.
+    const missing = createMissingWatcher(s.timeoutMs ?? 4000)
 
     const clearMissing = () => {
-      if (missingTimer != null) {
-        window.clearTimeout(missingTimer)
-        missingTimer = null
-      }
+      missing.reset()
       setMissing(false)
     }
+
+    let inputTimer: number | null = null
 
     const update = () => {
       if (!alive) return
@@ -189,7 +178,12 @@ export function ProductTour({
           setBox(null)
           return
         }
-        startMissing()
+        missing.start(() => {
+          if (!alive) return
+          if (shouldSkipStep(s, true)) advanceOnce()
+          else if (s.onMissingGoTo) goTo(s.onMissingGoTo)
+          else setMissing(true)
+        })
         // Keep the previous coachmark only while its element is still
         // connected; otherwise hide it until the new target appears.
         setBox((prev) => (prev && prev.el.isConnected ? prev : null))
@@ -198,8 +192,7 @@ export function ProductTour({
       clearMissing()
 
       const rect = el.getBoundingClientRect()
-      const cutoutEl = cutoutSel ? document.querySelector<HTMLElement>(cutoutSel) : null
-      setBox({ el, rect, cutoutRect: cutoutEl ? cutoutEl.getBoundingClientRect() : null })
+      setBox({ el, rect })
 
       // Bring the target back when it has scrolled out of the middle band.
       const vw = window.innerWidth
@@ -248,7 +241,7 @@ export function ProductTour({
     return () => {
       alive = false
       window.clearTimeout(t0)
-      if (missingTimer != null) window.clearTimeout(missingTimer)
+      missing.reset()
       if (inputTimer != null) window.clearInterval(inputTimer)
       mo.disconnect()
       window.removeEventListener('scroll', onScroll, true)
@@ -314,20 +307,20 @@ export function ProductTour({
 
   return (
     <div className="tour-root">
-      {box && !showMissing && box.cutoutRect ? (
+      {box && !showMissing ? (
         <>
-          <div className="tour-block" style={{ top: 0, left: 0, right: 0, height: box.cutoutRect.top }} />
+          <div className="tour-block" style={{ top: 0, left: 0, right: 0, height: box.rect.top }} />
           <div
             className="tour-block"
-            style={{ top: box.cutoutRect.bottom, left: 0, right: 0, bottom: 0 }}
+            style={{ top: box.rect.bottom, left: 0, right: 0, bottom: 0 }}
           />
           <div
             className="tour-block"
-            style={{ top: box.cutoutRect.top, bottom: box.cutoutRect.bottom, left: 0, width: box.cutoutRect.left }}
+            style={{ top: box.rect.top, bottom: box.rect.bottom, left: 0, width: box.rect.left }}
           />
           <div
             className="tour-block"
-            style={{ top: box.cutoutRect.top, bottom: box.cutoutRect.bottom, left: box.cutoutRect.right, right: 0 }}
+            style={{ top: box.rect.top, bottom: box.rect.bottom, left: box.rect.right, right: 0 }}
           />
           <div
             className="tour-hole"
