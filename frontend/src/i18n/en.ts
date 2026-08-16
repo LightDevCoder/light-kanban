@@ -103,8 +103,6 @@ const en: Dict = {
   'browse.title': 'Choose a workspace folder',
   'browse.browse': 'Browse…',
   'browse.browseTitle': 'Browse folders on the server in this page',
-  'browse.pick': 'System picker…',
-  'browse.pickTitle': 'Open the system folder dialog on the server machine',
   'browse.up': 'Up',
   'browse.select': 'Choose this folder',
   'browse.empty': 'This folder has no subfolders',
@@ -123,7 +121,6 @@ const en: Dict = {
   'alert.historyLoadFailed': 'Failed to load history: {e}',
   'alert.deleteFailed': 'Failed to delete: {e}',
   'alert.browseFailed': 'Browse failed: {e}',
-  'alert.pickFailed': 'System picker failed: {e}',
 
   wizard: {
     steps: [
@@ -131,7 +128,7 @@ const en: Dict = {
         title: '① Create a task',
         blocks: [
           { type: 'p', text: 'Click "+" in the top bar and fill in:' },
-          { type: 'list', items: ['Title: what the agent should do', 'Workspace folder: the project folder for this task (browse in-page or use the system picker)', 'Optional: description / tags / due date'] },
+          { type: 'list', items: ['Title: what the agent should do', 'Workspace folder: the project folder for this task (click "Browse…" to pick it level by level in the page)', 'Optional: description / tags / due date'] },
           { type: 'p', text: 'The task lands in the To Do column, ready for an agent to claim.' },
         ],
       },
@@ -140,7 +137,7 @@ const en: Dict = {
         blocks: [
           { type: 'p', text: 'Tell your agent to self-register and claim via the API:' },
           { type: 'code', text: 'GET  /api/tasks                     # find the task and its id\nPOST /api/avatars                   # upload an avatar image (multipart file)\nPOST /api/tasks/<id>/claim      # body: {"agentId","name","avatar"}' },
-          { type: 'p', text: 'Claim constraints: name is your tool name; avatar must be a real image (an uploaded path or an http(s) image URL) — fabricated paths get a 422. The card then shows the agent avatar at its top right.' },
+          { type: 'p', text: "Claim constraints: name is your tool name; avatar must be the agent's own icon image (e.g. Codex uses the Codex icon, Claude Code the Claude Code icon — an uploaded path or an http(s) image URL); placeholders or fabricated paths get a 422. The card then shows the agent avatar at its top right." },
         ],
       },
       {

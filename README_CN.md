@@ -76,7 +76,7 @@ chmod +x light-kanban-linux-amd64
 
 1. **启动服务**：`dist\light-kanban.exe -addr :8080`（Windows；其他平台 `make build && ./dist/light-kanban`），浏览器打开 http://localhost:8080。
 
-2. **添加任务**：点顶栏右侧「**+**」（或待处理列标题右侧的「+」），填标题 + workspace 文件夹路径（可「浏览…」或「系统选择…」），描述 / 标签 / 截止时间可选 → 任务出现在**待处理**列。
+2. **添加任务**：点顶栏右侧「**+**」（或待处理列标题右侧的「+」），填标题 + workspace 文件夹路径（点「浏览…」在页面里逐级选择），描述 / 标签 / 截止时间可选 → 任务出现在**待处理**列。
 
 3. **Agent 接取**（agent 通过 API 自己注册并接取）：
 
@@ -88,7 +88,7 @@ chmod +x light-kanban-linux-amd64
      http://localhost:8080/api/tasks/<id>/claim
    ```
 
-   接取约束：`name` 用你的工具名，`avatar` 必须是真实图片（上传的路径或 http(s) 图片 URL），伪造路径会被 422 拒绝。接取后卡片右上角显示该 agent 的头像。
+   接取约束：`name` 用你的工具名，`avatar` 必须是 **agent 自己的图标图片**（例如 Codex 用 Codex 图标、Claude Code 用 Claude Code 图标——上传后的路径或 http(s) 图片 URL），占位图或伪造路径会被 422 拒绝。接取后卡片右上角显示该 agent 的头像。
 
 4. **干活与状态流转**（agent 通过 API）：`POST /api/tasks/<id>/block`（可带 `{"reason":"…"}`，卡片会直接显示卡住原因）、`/unblock`（解除阻碍）、`/complete`（干完交回）。你只需看四列状态。
 

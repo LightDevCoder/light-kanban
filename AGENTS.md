@@ -5,7 +5,7 @@ A single-binary Go kanban board: a human queues tasks (each card points at a wor
 ## Layout
 
 - `cmd/light-kanban/main.go` — entrypoint (flags, auto-opens the browser)
-- `internal/api/` — HTTP API (+ `api_test.go`, `pick_test.go`)
+- `internal/api/` — HTTP API (+ `api_test.go`)
 - `internal/store/` — SQLite store + state machine (+ `store_test.go`)
 - `internal/webui/` — `webui.go` embeds `dist/` via `go:embed`; **`dist/` is the committed production build of the frontend**
 - `frontend/` — React 18 + TypeScript + Vite app (the real UI source; see ADR-0002)

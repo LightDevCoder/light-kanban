@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useI18n } from '../../i18n'
-import { pickFolder } from '../../api/filesystem'
 import { BOARD_COLUMNS, type Status, type Task } from '../../types'
 import { FolderBrowserDialog } from '../FolderBrowser/FolderBrowserDialog'
 
@@ -21,8 +20,8 @@ function toLocalInput(iso: string | null | undefined): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-// Shared create/edit form. The workspace field keeps both folder pickers
-// (in-page browse + native system dialog).
+// Shared create/edit form. The workspace field has a single「浏览…」entry —
+// the in-page server folder browser (no native system picker).
 export function TaskForm({
   initial,
   isEdit,
@@ -59,15 +58,6 @@ export function TaskForm({
     })
   }
 
-  const systemPick = async () => {
-    try {
-      const res = await pickFolder()
-      if (res.path) setWorkspacePath(res.path)
-    } catch (err) {
-      alert(t('alert.pickFailed', { e: err instanceof Error ? err.message : String(err) }))
-    }
-  }
-
   return (
     <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <label className="form-field">
@@ -91,9 +81,6 @@ export function TaskForm({
           />
           <button type="button" className="btn sm" title={t('browse.browseTitle')} onClick={() => setBrowseOpen(true)}>
             {t('browse.browse')}
-          </button>
-          <button type="button" className="btn sm" title={t('browse.pickTitle')} onClick={() => void systemPick()}>
-            {t('browse.pick')}
           </button>
         </span>
       </label>

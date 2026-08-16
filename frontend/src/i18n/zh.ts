@@ -102,8 +102,6 @@ const zh = {
   'browse.title': '选择 workspace 文件夹',
   'browse.browse': '浏览…',
   'browse.browseTitle': '在页面里浏览服务器文件夹',
-  'browse.pick': '系统选择…',
-  'browse.pickTitle': '调起服务器所在电脑的系统文件夹对话框',
   'browse.up': '上级',
   'browse.select': '选择此文件夹',
   'browse.empty': '这个文件夹下没有子文件夹',
@@ -122,7 +120,6 @@ const zh = {
   'alert.historyLoadFailed': '加载历史失败：{e}',
   'alert.deleteFailed': '删除失败：{e}',
   'alert.browseFailed': '浏览失败：{e}',
-  'alert.pickFailed': '系统选择失败：{e}',
 
   wizard: {
     steps: [
@@ -130,7 +127,7 @@ const zh = {
         title: '① 新建任务',
         blocks: [
           { type: 'p', text: '点右上角「+」，在弹窗里填写：' },
-          { type: 'list', items: ['标题：要让 agent 做什么', 'workspace 文件夹：该任务的项目文件夹路径（可「浏览…」或「系统选择…」）', '可选：描述 / 标签 / 截止时间'] },
+          { type: 'list', items: ['标题：要让 agent 做什么', 'workspace 文件夹：该任务的项目文件夹路径（点「浏览…」在页面里逐级选择）', '可选：描述 / 标签 / 截止时间'] },
           { type: 'p', text: '创建后任务出现在待处理列，agent 就可以接取了。' },
         ],
       },
@@ -139,7 +136,7 @@ const zh = {
         blocks: [
           { type: 'p', text: '告诉你的 agent 通过 API 自己注册并接取：' },
           { type: 'code', text: 'GET  /api/tasks                     # 找到任务和它的 id\nPOST /api/avatars                   # 上传头像图片（multipart file）\nPOST /api/tasks/<id>/claim      # body: {"agentId","name","avatar"}' },
-          { type: 'p', text: '接取约束：name 用工具名，avatar 必须是真实图片（上传的路径或 http(s) 图片 URL），伪造路径会被 422 拒绝。接取后卡片右上角显示 agent 头像。' },
+          { type: 'p', text: '接取约束：name 用工具名；avatar 必须是 agent 自己的图标图片（例如 Codex 用 Codex 图标、Claude Code 用 Claude Code 图标——上传后的路径或 http(s) 图片 URL），占位图或伪造路径会被 422 拒绝。接取后卡片右上角显示 agent 头像。' },
         ],
       },
       {

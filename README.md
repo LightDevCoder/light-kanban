@@ -76,7 +76,7 @@ Five steps get you from zero to a full loop (the web UI also shows the same guid
 
 1. **Start the service**: `dist\light-kanban.exe -addr :8080` on Windows (other platforms: `make build && ./dist/light-kanban`), then open http://localhost:8080.
 
-2. **Add a task**: click "**+**" in the top bar (or the "+" in the To Do column header), fill in the title + workspace folder path (browse in-page or use the system picker); description / tags / due date are optional → the task lands in the **To Do** column.
+2. **Add a task**: click "**+**" in the top bar (or the "+" in the To Do column header), fill in the title + workspace folder path (click "Browse…" to pick it level by level in the page); description / tags / due date are optional → the task lands in the **To Do** column.
 
 3. **An agent claims it** (agents self-register and claim via the API):
 
@@ -88,7 +88,7 @@ Five steps get you from zero to a full loop (the web UI also shows the same guid
      http://localhost:8080/api/tasks/<id>/claim
    ```
 
-   Claim constraints: `name` is your tool name; `avatar` must be a real image (an uploaded path or an http(s) image URL) — fabricated paths get a 422. The card then shows the agent's avatar at its top right.
+   Claim constraints: `name` is your tool name; `avatar` must be the agent's **own icon image** (e.g. Codex claims with the Codex icon, Claude Code with the Claude Code icon — an uploaded path or an http(s) image URL). Placeholders and fabricated paths get a 422. The card then shows the agent's avatar at its top right.
 
 4. **Work and status transitions** (agent, via API): `POST /api/tasks/<id>/block` (optionally with `{"reason":"…"}` — the card shows why it is stuck), `/unblock`, `/complete`. You just watch the four columns.
 

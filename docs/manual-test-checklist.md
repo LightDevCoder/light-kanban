@@ -32,7 +32,6 @@
 | B6 | 截止时间留空 | 不填截止时间 | 能正常创建，卡片无截止提示 | |
 | B7 | 页内浏览选目录 | 点路径框旁「浏览…」→ 点进文件夹 →「选择此文件夹」 | 路径框自动填入所选文件夹完整路径 | |
 | B8 | 浏览上级 | 浏览弹窗里点「上级」 | 回到上一级目录；到根目录后 Mac 显示 `/` | |
-| B9 | 系统选择 | 点「系统选择…」 | 服务器所在电脑弹出系统文件夹对话框，选完路径自动填入 | |
 | B12 | 取消新建 | 打开弹窗后点「取消」/ 点弹窗外 / 按 Esc | 弹窗关闭，没有任务被创建 | |
 
 ## C. 看板布局
@@ -149,7 +148,6 @@
 | N1 | Apple Silicon | `chmod +x` 后运行 `./light-kanban-darwin-arm64 -addr :8080` | 正常启动，页面功能同 Windows | |
 | N2 | Intel Mac | 用 `dist/light-kanban-darwin-amd64` | 同上 | |
 | N3 | Gatekeeper | 首次运行若提示"无法验证开发者" | 右键 → 打开，或 `xattr -dr com.apple.quarantine ./light-kanban-darwin-arm64` 后重试 | |
-| N4 | 系统选择 | Mac 上点「系统选择…」 | 弹出 macOS 的 `choose folder` 对话框 | |
 
 ---
 

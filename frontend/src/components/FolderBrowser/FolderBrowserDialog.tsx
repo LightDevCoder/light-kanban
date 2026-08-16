@@ -4,7 +4,8 @@ import { browseDirs } from '../../api/filesystem'
 import { isAbsolutePath, parentOf } from '../../utils/path'
 import { Modal } from '../common/Modal'
 
-// In-page server folder browser for the workspacePath field.
+// In-page server folder browser for the workspacePath field — the single
+// folder-picking entry point (browse only; no native system picker).
 export function FolderBrowserDialog({
   onSelect,
   onClose,
