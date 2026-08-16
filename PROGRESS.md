@@ -1,16 +1,15 @@
 # PROGRESS — 项目进度与交接记录
 
 > 本文档记录 Light-Kanban 的当前进度、约定、待办与 Mac 迁移指引，供后续维护者快速接上手。
-> 最后更新：2026-08-16（v1.0.2 UI 重构实现完成，等待本地验收）
+> 最后更新：2026-08-16（v1.0.2 已发布）
 
 ## 1. 当前状态
 
 - **远端仓库**：https://github.com/LightDevCoder/light-kanban（public，gh 账号 LightDevCoder）
-- **最新发布**：`v1.0.1`（tag 指向 `f465348`），4 个平台二进制齐全
-- **进行中**：`v1.0.2` —— UI/UX 重构（React + TypeScript + Vite）。实现完成、测试通过、production embed 验证通过；**等待用户本地验收 + 新版截图，未获明确批准前不 push / 不打 tag / 不发 Release**
-- **工作树**：本地提交领先 origin/main（见 git log）
+- **最新发布**：`v1.0.2`（UI/UX 重构，React 前端），4 个平台二进制齐全
+- **工作树**：与 origin/main 一致
 
-## 2. v1.0.2 已实现（本地，未发布）
+## 2. v1.0.2 已实现（已发布）
 
 - **前端迁移**：`internal/webui` 的 vanilla JS → `frontend/`（React 18 + TypeScript + Vite + TanStack Query），产物提交在 `internal/webui/dist/`（go:embed，单二进制不变；fresh clone 无需 npm 即可 go build/test）。决策见 `docs/adr/0002-react-frontend.md`
 - **新版看板**：浅色安静顶栏（搜索 / 筛选 / 设置 / +）；四列固定结构、列头 pinned、每列独立滚动、窄屏横向滚动；高密度紧凑卡片（LK-XXXX 短号、右上 18px Agent 头像、workspace basename + 哈希色点、≤2 标签 +N、截止/逾期/卡住 chips、阻碍原因行）
