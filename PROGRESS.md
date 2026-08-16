@@ -1,16 +1,16 @@
 # PROGRESS — 项目进度与交接记录
 
 > 本文档记录 Light-Kanban 的当前进度、约定、待办与 Mac 迁移指引，供后续维护者快速接上手。
-> 最后更新：2026-08-16（v1.0.4 已实现，等待用户本地验收）
+> 最后更新：2026-08-17（v1.0.4 已实现并推送到 origin/main，等待用户发布指令）
 
 ## 1. 当前状态
 
 - **远端仓库**：https://github.com/LightDevCoder/light-kanban（public，gh 账号 LightDevCoder）
 - **最新发布**：`v1.0.3`（hardening release），4 个平台二进制齐全（tag `v1.0.3` 指向发布时 commit；不移动、不覆盖）
-- **当前工作**：**v1.0.4 implementation complete — waiting for local acceptance — not released**。v1.0.4 目标：归档历史一键打开项目目录 + 交互式产品导览（替换旧 Wizard）；代码、测试与文档已完成，等用户按 `docs/manual-test-checklist.md` 验收通过并明确说「可以发布」后，再跑 `make cross` 出四平台二进制并发布 `v1.0.4`
-- **工作树**：main 分支（已改动的文件未提交前先本地验证）
+- **当前工作**：**v1.0.4 implementation complete — pushed to origin/main — not released**。v1.0.4 目标：归档历史一键打开项目目录 + 交互式产品导览（替换旧 Wizard）；代码、测试与文档已完成，用户本地验收中发现并修复了导览灰屏 bug（缺失目标计时器回环 + 收紧为仅高亮目标可点）。等用户明确说「可以发布」后，再跑 `make cross` 出四平台二进制、建 `v1.0.4` tag 与 GitHub Release
+- **工作树**：与 origin/main 一致
 
-## 2. v1.0.4 进行中（实现完成，待验收，未发布）
+## 2. v1.0.4 进行中（实现完成，已推送，未发布）
 
 - **归档历史打开项目目录**：每条归档记录右侧新增文件夹图标（复用 Task Drawer 同款 `FolderIcon` + `openFolder` API，错误提示与抽屉一致，无新后端 API）；点击不改变归档状态、不关闭弹窗；Delete / 全选删除不变
 - **交互式产品导览**（替换旧居中 Wizard Modal，`GuideDialog` 已删除）：
