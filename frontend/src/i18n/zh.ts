@@ -99,13 +99,10 @@ const zh = {
   'archive.deleteOneConfirm': '确定删除该条历史记录？此操作不可恢复。',
   'archive.deleteManyConfirm': '确定删除选中的 {n} 条历史记录？此操作不可恢复。',
 
-  'browse.title': '选择 workspace 文件夹',
-  'browse.browse': '浏览…',
-  'browse.browseTitle': '在页面里浏览服务器文件夹',
-  'browse.up': '上级',
-  'browse.select': '选择此文件夹',
-  'browse.empty': '这个文件夹下没有子文件夹',
-  'browse.root': '（根目录，点击下方路径进入）',
+  'pick.choose': '选择…',
+  'pick.chooseTitle': '调起服务器所在电脑的系统文件夹窗口',
+  'pick.waiting': '等待系统文件夹窗口……（窗口弹在运行看板的电脑上，没看到可点右侧「取消等待」）',
+  'pick.cancelWait': '取消等待',
 
   'wizard.welcome': '欢迎使用 Light-Kanban 任务看板',
   'wizard.skip': '跳过',
@@ -119,7 +116,7 @@ const zh = {
   'alert.opFailed': '操作失败：{e}',
   'alert.historyLoadFailed': '加载历史失败：{e}',
   'alert.deleteFailed': '删除失败：{e}',
-  'alert.browseFailed': '浏览失败：{e}',
+  'alert.pickFailed': '系统选择失败：{e}',
 
   wizard: {
     steps: [
@@ -127,7 +124,7 @@ const zh = {
         title: '① 新建任务',
         blocks: [
           { type: 'p', text: '点右上角「+」，在弹窗里填写：' },
-          { type: 'list', items: ['标题：要让 agent 做什么', 'workspace 文件夹：该任务的项目文件夹路径（点「浏览…」在页面里逐级选择）', '可选：描述 / 标签 / 截止时间'] },
+          { type: 'list', items: ['标题：要让 agent 做什么', 'workspace 文件夹：直接输入/粘贴路径，或点「选择…」调起系统文件夹窗口', '可选：描述 / 标签 / 截止时间'] },
           { type: 'p', text: '创建后任务出现在待处理列，agent 就可以接取了。' },
         ],
       },

@@ -32,7 +32,7 @@ Pick the file for your machine from the [Releases](https://github.com/LightDevCo
 | macOS Intel | `light-kanban-darwin-amd64` |
 | Linux | `light-kanban-linux-amd64` |
 
-On startup the browser opens automatically at http://localhost:8080 (disable with `-no-open`; change port with `-addr :9090`). Data (`kanban.db`, `avatars/`) is stored **in the folder where you run it** — put the binary in a dedicated folder.
+On startup the browser opens automatically at http://localhost:8641 (disable with `-no-open`; change port with `-addr :9090`). Data (`kanban.db`, `avatars/`) is stored **in the folder where you run it** — put the binary in a dedicated folder.
 
 ### Windows (double-click only)
 
@@ -68,24 +68,24 @@ chmod +x light-kanban-linux-amd64
 ./light-kanban-linux-amd64
 ```
 
-The browser opens automatically; Ctrl+C stops. To allow other machines on the LAN, start with `-addr :8080` and open the firewall port.
+The browser opens automatically; Ctrl+C stops. To allow other machines on the LAN, start with `-addr :8641` and open the firewall port.
 
 ## Quick Start
 
 Five steps get you from zero to a full loop (the web UI also shows the same guide on first visit — reopen it anytime from the settings menu):
 
-1. **Start the service**: `dist\light-kanban.exe -addr :8080` on Windows (other platforms: `make build && ./dist/light-kanban`), then open http://localhost:8080.
+1. **Start the service**: `dist\light-kanban.exe -addr :8641` on Windows (other platforms: `make build && ./dist/light-kanban`), then open http://localhost:8641.
 
-2. **Add a task**: click "**+**" in the top bar (or the "+" in the To Do column header), fill in the title + workspace folder path (click "Browse…" to pick it level by level in the page); description / tags / due date are optional → the task lands in the **To Do** column.
+2. **Add a task**: click "**+**" in the top bar (or the "+" in the To Do column header), fill in the title + workspace folder path (type/paste it, or click "Choose…" to open the system folder dialog); description / tags / due date are optional → the task lands in the **To Do** column.
 
 3. **An agent claims it** (agents self-register and claim via the API):
 
    ```sh
-   curl http://localhost:8080/api/tasks                          # find the task and its id
-   curl -F "file=@avatar.png" http://localhost:8080/api/avatars   # upload an avatar, note the returned path
+   curl http://localhost:8641/api/tasks                          # find the task and its id
+   curl -F "file=@avatar.png" http://localhost:8641/api/avatars   # upload an avatar, note the returned path
    curl -X POST -H "Content-Type: application/json" \
      -d '{"agentId":"my-agent","name":"My Agent","avatar":"/api/avatars/xxx.png"}' \
-     http://localhost:8080/api/tasks/<id>/claim
+     http://localhost:8641/api/tasks/<id>/claim
    ```
 
    Claim constraints: `name` is your tool name; `avatar` must be the agent's **own icon image** (e.g. Codex claims with the Codex icon, Claude Code with the Claude Code icon — an uploaded path or an http(s) image URL). Placeholders and fabricated paths get a 422. The card then shows the agent's avatar at its top right.
@@ -98,19 +98,19 @@ Five steps get you from zero to a full loop (the web UI also shows the same guid
 
 ```sh
 make build            # builds the frontend, stages internal/webui/dist, compiles the binary
-./dist/light-kanban -addr :8080 -db kanban.db
-# open http://localhost:8080
+./dist/light-kanban -addr :8641 -db kanban.db
+# open http://localhost:8641
 ```
 
 Flags:
 
-- `-addr` — listen address (default `:8080`)
+- `-addr` — listen address (default `:8641`)
 - `-db` — SQLite database path (default `kanban.db`; `:memory:` is accepted)
 - `-no-open` — do not open the browser on startup
 
 ## Develop
 
 - Go tests run against the HTTP API and the SQLite store (see spec.md's Testing Decisions); `go test ./...` runs the whole suite. The committed `internal/webui/dist/` keeps this green on a fresh clone — no npm needed for backend work.
-- The web UI is a React 18 + TypeScript + Vite app in `frontend/` (ADR-0002): `make frontend-install` once, `make dev-frontend` for the Vite dev server (proxies `/api` to a Go backend on :8080), `make frontend-build` to stage the production bundle into `internal/webui/dist/`.
+- The web UI is a React 18 + TypeScript + Vite app in `frontend/` (ADR-0002): `make frontend-install` once, `make dev-frontend` for the Vite dev server (proxies `/api` to a Go backend on :8641), `make frontend-build` to stage the production bundle into `internal/webui/dist/`.
 - `make cross` (or `scripts/cross-build.ps1` on Windows) produces the release binaries under `dist/`: linux (amd64), darwin (amd64 + arm64), windows (amd64) — both build the frontend first.
 - `node scripts/seed-demo.cjs` seeds a running board with realistic demo data (35 tasks / 3 agents) for density checks and screenshots.

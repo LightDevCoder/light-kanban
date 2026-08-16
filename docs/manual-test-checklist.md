@@ -2,17 +2,17 @@
 
 > 照着下表把功能都点一遍，在「结果」列打 ✅ / ❌；想给我留言就写在「评论（留给我）」列，然后告诉我一声，我会读这个文件逐条回复。
 > 想用 Excel 测：打开 `docs/light-kanban-验收清单.xlsx`（同一份清单，「结果」列带 ✅ 通过 / ❌ 失败 / ⚠ 存疑 下拉选项）。改动清单后可用 `node scripts/make-checklist-xlsx.cjs` 重新生成。
-> 前提：用最新二进制启动服务（`./dist/light-kanban -addr :8080`），浏览器打开 http://localhost:8080 并**硬刷新**（Ctrl+F5 / Cmd+Shift+R，避免旧页面缓存）。
+> 前提：用最新二进制启动服务（`./dist/light-kanban -addr :8641`），浏览器打开 http://localhost:8641 并**硬刷新**（Ctrl+F5 / Cmd+Shift+R，避免旧页面缓存）。
 > 想看高密度效果：服务运行中执行 `node scripts/seed-demo.cjs` 灌入 35 条演示任务。
 
 ## A. 启动与页面
 
 | # | 测什么 | 怎么测 | 预期结果 | 结果 | 评论（留给我） |
 |---|--------|--------|----------|------|--------------|
-| A1 | 服务启动 | 运行 `./dist/light-kanban -addr :8080` | 命令行出现 `listening on :8080`，不报错 | |
-| A1b | 双击启动（Windows） | 直接双击 `dist\light-kanban.exe` | 弹出控制台窗口并**自动打开浏览器** http://localhost:8080 | |
-| A2 | 健康检查 | 浏览器开 http://localhost:8080/api/health | 显示 `{"db":"ok","status":"ok"}` | |
-| A3 | 页面加载 | 打开 http://localhost:8080 | 浅色顶栏（Light Kanban / 任务看板）+ 四列看板，无弹窗遮盖，无深色大 Header | |
+| A1 | 服务启动 | 运行 `./dist/light-kanban -addr :8641` | 命令行出现 `listening on :8641`，不报错 | |
+| A1b | 双击启动（Windows） | 直接双击 `dist\light-kanban.exe` | 弹出控制台窗口并**自动打开浏览器** http://localhost:8641 | |
+| A2 | 健康检查 | 浏览器开 http://localhost:8641/api/health | 显示 `{"db":"ok","status":"ok"}` | |
+| A3 | 页面加载 | 打开 http://localhost:8641 | 浅色顶栏（Light Kanban / 任务看板）+ 四列看板，无弹窗遮盖，无深色大 Header | |
 | A4 | 连接指示 | 正常时看顶栏右侧 | **没有**常亮绿色状态点；停掉服务后出现红色「连接失败」 | |
 | A5 | 首次引导 | 新开无痕窗口（或清掉 localStorage `lk-wizard-seen`）打开页面 | 自动弹出 4 步引导向导，可上一步 / 下一步 / 跳过 | |
 | A6 | 重开向导 | 跳过向导 → 顶栏右侧设置（齿轮）→「使用向导」 | 向导随时能重新打开 | |
@@ -30,8 +30,8 @@
 | B4 | 可选字段 | 填描述、标签、截止时间 | 卡片显示标签、截止提示；描述在抽屉里完整可见 | |
 | B5 | 多个标签 | 标签填 `go, ui, test` | 卡片最多显示 2 个标签 + 「+1」 | |
 | B6 | 截止时间留空 | 不填截止时间 | 能正常创建，卡片无截止提示 | |
-| B7 | 页内浏览选目录 | 点路径框旁「浏览…」→ 点进文件夹 →「选择此文件夹」 | 路径框自动填入所选文件夹完整路径 | |
-| B8 | 浏览上级 | 浏览弹窗里点「上级」 | 回到上一级目录；到根目录后 Mac 显示 `/` | |
+| B7 | 直接输入路径 | 在 workspace 路径框手动输入/粘贴一个存在的绝对路径 | 正常创建任务，卡片显示路径末级名称 | |
+| B8 | 系统选择 | 点路径框旁「选择…」 | 运行看板的电脑弹出系统文件夹窗口并置前；选完自动填入路径；点「取消等待」可中止 | |
 | B12 | 取消新建 | 打开弹窗后点「取消」/ 点弹窗外 / 按 Esc | 弹窗关闭，没有任务被创建 | |
 
 ## C. 看板布局
@@ -75,7 +75,7 @@
 |---|--------|--------|----------|------|--------------|
 | F1 | 悬停验收 | 悬停等你确认列的卡片 | 卡片底部浮现「验收通过」「退回修改」两个按钮 | |
 | F2 | 验收通过 | 点「验收通过」（悬停按钮或抽屉内） | 卡片从四列消失；设置 → 归档历史里能看到，带「完成于 …」时间 | |
-| F3 | 退回修改带反馈 | 抽屉里点「退回修改」→ 填反馈 → 确认退回 | 卡片回到处理中列；抽屉里可见「退回反馈」；`curl http://localhost:8080/api/tasks` 能读到 `reviewFeedback` 字段 | |
+| F3 | 退回修改带反馈 | 抽屉里点「退回修改」→ 填反馈 → 确认退回 | 卡片回到处理中列；抽屉里可见「退回反馈」；`curl http://localhost:8641/api/tasks` 能读到 `reviewFeedback` 字段 | |
 | F4 | 反馈流转 | 退回后让 agent 重新 complete（或编辑改状态到等你确认） | 退回反馈被清除，新一轮验收重新开始 | |
 
 ## G. 接取任务 & agent 身份（API）
@@ -135,7 +135,7 @@
 
 | # | 测什么 | 怎么测 | 预期结果 | 结果 | 评论（留给我） |
 |---|--------|--------|----------|------|--------------|
-| M1 | 健康检查 | `curl http://localhost:8080/api/health` | `{"db":"ok","status":"ok"}` | |
+| M1 | 健康检查 | `curl http://localhost:8641/api/health` | `{"db":"ok","status":"ok"}` | |
 | M2 | 创建任务 | `curl -X POST -d '{"title":"API 测试","workspacePath":"/tmp/x"}' .../api/tasks` | 返回任务 JSON，`"status":"todo"` | |
 | M3 | 接取冲突 | 对同一任务连发两次 claim | 第一次 200，第二次 409 | |
 | M4 | 归档历史查询 | `curl ".../api/tasks?status=archived"` | 返回已归档数组，含 `completedAt` | |
@@ -145,7 +145,7 @@
 
 | # | 测什么 | 怎么测 | 预期结果 | 结果 | 评论（留给我） |
 |---|--------|--------|----------|------|--------------|
-| N1 | Apple Silicon | `chmod +x` 后运行 `./light-kanban-darwin-arm64 -addr :8080` | 正常启动，页面功能同 Windows | |
+| N1 | Apple Silicon | `chmod +x` 后运行 `./light-kanban-darwin-arm64 -addr :8641` | 正常启动，页面功能同 Windows | |
 | N2 | Intel Mac | 用 `dist/light-kanban-darwin-amd64` | 同上 | |
 | N3 | Gatekeeper | 首次运行若提示"无法验证开发者" | 右键 → 打开，或 `xattr -dr com.apple.quarantine ./light-kanban-darwin-arm64` 后重试 | |
 

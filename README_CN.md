@@ -32,7 +32,7 @@
 | macOS Intel | `light-kanban-darwin-amd64` |
 | Linux | `light-kanban-linux-amd64` |
 
-启动后会**自动打开浏览器** http://localhost:8080（不想自动开：加 `-no-open`；换端口：`-addr :9090`）。数据（`kanban.db`、`avatars/`）保存在**你运行命令时所在的文件夹**，建议专门建一个文件夹放二进制和数据。
+启动后会**自动打开浏览器** http://localhost:8641（不想自动开：加 `-no-open`；换端口：`-addr :9090`）。数据（`kanban.db`、`avatars/`）保存在**你运行命令时所在的文件夹**，建议专门建一个文件夹放二进制和数据。
 
 ### Windows（可以纯双击）
 
@@ -68,24 +68,24 @@ chmod +x light-kanban-linux-amd64
 ./light-kanban-linux-amd64
 ```
 
-浏览器自动打开看板，Ctrl+C 停止。需要让局域网其他电脑访问时，用 `-addr :8080` 启动并放行防火墙端口。
+浏览器自动打开看板，Ctrl+C 停止。需要让局域网其他电脑访问时，用 `-addr :8641` 启动并放行防火墙端口。
 
 ## Quick Start
 
 跑通「建任务 → agent 接取 → 干活 → 验收归档」只需 5 步（首次打开网页时也有同款引导向导，之后可在右上「设置」菜单里随时重看）：
 
-1. **启动服务**：`dist\light-kanban.exe -addr :8080`（Windows；其他平台 `make build && ./dist/light-kanban`），浏览器打开 http://localhost:8080。
+1. **启动服务**：`dist\light-kanban.exe -addr :8641`（Windows；其他平台 `make build && ./dist/light-kanban`），浏览器打开 http://localhost:8641。
 
-2. **添加任务**：点顶栏右侧「**+**」（或待处理列标题右侧的「+」），填标题 + workspace 文件夹路径（点「浏览…」在页面里逐级选择），描述 / 标签 / 截止时间可选 → 任务出现在**待处理**列。
+2. **添加任务**：点顶栏右侧「**+**」（或待处理列标题右侧的「+」），填标题 + workspace 文件夹路径（直接输入/粘贴路径，或点「选择…」调起系统文件夹窗口），描述 / 标签 / 截止时间可选 → 任务出现在**待处理**列。
 
 3. **Agent 接取**（agent 通过 API 自己注册并接取）：
 
    ```sh
-   curl http://localhost:8080/api/tasks                          # 找到任务和它的 id
-   curl -F "file=@avatar.png" http://localhost:8080/api/avatars   # 上传头像，记下返回的 path
+   curl http://localhost:8641/api/tasks                          # 找到任务和它的 id
+   curl -F "file=@avatar.png" http://localhost:8641/api/avatars   # 上传头像，记下返回的 path
    curl -X POST -H "Content-Type: application/json" \
      -d '{"agentId":"my-agent","name":"My Agent","avatar":"/api/avatars/xxx.png"}' \
-     http://localhost:8080/api/tasks/<id>/claim
+     http://localhost:8641/api/tasks/<id>/claim
    ```
 
    接取约束：`name` 用你的工具名，`avatar` 必须是 **agent 自己的图标图片**（例如 Codex 用 Codex 图标、Claude Code 用 Claude Code 图标——上传后的路径或 http(s) 图片 URL），占位图或伪造路径会被 422 拒绝。接取后卡片右上角显示该 agent 的头像。
@@ -98,19 +98,19 @@ chmod +x light-kanban-linux-amd64
 
 ```sh
 make build            # 构建前端 → 拷入 internal/webui/dist → 编译二进制
-./dist/light-kanban -addr :8080 -db kanban.db
-# 打开 http://localhost:8080
+./dist/light-kanban -addr :8641 -db kanban.db
+# 打开 http://localhost:8641
 ```
 
 参数：
 
-- `-addr` — 监听地址（默认 `:8080`）
+- `-addr` — 监听地址（默认 `:8641`）
 - `-db` — SQLite 数据库路径（默认 `kanban.db`；支持 `:memory:`）
 - `-no-open` — 启动时不自动打开浏览器
 
 ## Develop
 
 - 测试跑在 HTTP API 与 SQLite store 两个接缝上（见 spec.md 的 Testing Decisions）；`go test ./...` 跑全量。前端产物已提交在 `internal/webui/dist/`，fresh clone 不装 npm 也能通过。
-- 网页 UI 是 `frontend/` 下的 React 18 + TypeScript + Vite 应用（见 ADR-0002）：首次 `make frontend-install`；开发用 `make dev-frontend`（Vite :5173，代理 `/api` 到 :8080 的 Go 后端）；`make frontend-build` 把生产包 staged 到 `internal/webui/dist/`。
+- 网页 UI 是 `frontend/` 下的 React 18 + TypeScript + Vite 应用（见 ADR-0002）：首次 `make frontend-install`；开发用 `make dev-frontend`（Vite :5173，代理 `/api` 到 :8641 的 Go 后端）；`make frontend-build` 把生产包 staged 到 `internal/webui/dist/`。
 - `make cross`（Windows 用 `scripts/cross-build.ps1`）产出 `dist/` 下的发布二进制：linux (amd64)、darwin (amd64 + arm64)、windows (amd64)——两者都会先构建前端。
 - `node scripts/seed-demo.cjs` 给运行中的看板灌入演示数据（35 任务 / 3 agent），用于密度测试与截图。

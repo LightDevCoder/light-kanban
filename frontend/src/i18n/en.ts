@@ -100,13 +100,10 @@ const en: Dict = {
   'archive.deleteOneConfirm': 'Delete this history entry? This cannot be undone.',
   'archive.deleteManyConfirm': 'Delete the {n} selected history entries? This cannot be undone.',
 
-  'browse.title': 'Choose a workspace folder',
-  'browse.browse': 'Browse…',
-  'browse.browseTitle': 'Browse folders on the server in this page',
-  'browse.up': 'Up',
-  'browse.select': 'Choose this folder',
-  'browse.empty': 'This folder has no subfolders',
-  'browse.root': '(root — pick a folder below)',
+  'pick.choose': 'Choose…',
+  'pick.chooseTitle': 'Open the system folder dialog on the server machine',
+  'pick.waiting': 'Waiting for the system folder dialog… (it opens on the machine running the board — click "Stop waiting" if you don\'t see it)',
+  'pick.cancelWait': 'Stop waiting',
 
   'wizard.welcome': 'Welcome to Light-Kanban',
   'wizard.skip': 'Skip',
@@ -120,7 +117,7 @@ const en: Dict = {
   'alert.opFailed': 'Operation failed: {e}',
   'alert.historyLoadFailed': 'Failed to load history: {e}',
   'alert.deleteFailed': 'Failed to delete: {e}',
-  'alert.browseFailed': 'Browse failed: {e}',
+  'alert.pickFailed': 'System picker failed: {e}',
 
   wizard: {
     steps: [
@@ -128,7 +125,7 @@ const en: Dict = {
         title: '① Create a task',
         blocks: [
           { type: 'p', text: 'Click "+" in the top bar and fill in:' },
-          { type: 'list', items: ['Title: what the agent should do', 'Workspace folder: the project folder for this task (click "Browse…" to pick it level by level in the page)', 'Optional: description / tags / due date'] },
+          { type: 'list', items: ['Title: what the agent should do', 'Workspace folder: type/paste the path, or click "Choose…" to open the system folder dialog', 'Optional: description / tags / due date'] },
           { type: 'p', text: 'The task lands in the To Do column, ready for an agent to claim.' },
         ],
       },

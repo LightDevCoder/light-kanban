@@ -579,41 +579,11 @@ input, textarea, select { font-family: inherit; }
 .wizard-dot.active { background: var(--accent); }
 .wizard-dot.done { background: #b7cdfd; }
 
-/* ---------- Folder browser ---------- */
-.browse-modal { width: min(560px, 92vw); }
-.browse-path {
-  font-family: var(--mono);
-  font-size: 12px;
-  background: var(--bg);
-  border-radius: 6px;
-  padding: 7px 10px;
-  word-break: break-all;
-  color: var(--text-2);
+/* ---------- Native folder picker waiting hint ---------- */
+.pick-waiting {
+  font-size: 11px;
+  color: var(--amber, #b45309);
 }
-.browse-listing {
-  min-height: 120px;
-  max-height: 300px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  padding: 6px;
-}
-.browse-item {
-  text-align: left;
-  padding: 6px 10px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  font-size: 12px;
-  font-family: var(--mono);
-  color: var(--text);
-  cursor: pointer;
-  word-break: break-all;
-}
-.browse-item:hover { background: var(--hover); }
 
 /* scrollbars, quiet */
 ::-webkit-scrollbar { width: 8px; height: 8px; }

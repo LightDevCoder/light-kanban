@@ -100,7 +100,7 @@ Status: ready-for-agent
   | `DELETE /api/tasks/:id` | delete a task entirely (human correction; removes it from the board and the archived history) |
   | `GET /api/agents` | list agents |
   | `POST /api/agents` | pre-configure an agent (human) |
-  | `GET /api/fs/dirs?path=<abs>` | list subdirectories of an absolute path (workspace-folder browser; `..` and relative paths rejected; empty path = platform roots) |
+  | `POST /api/fs/pick` | open the server's native folder dialog on the operator's machine (macOS dialog self-activates to the front); returns `{"path": "<abs>"}` (`""` = canceled); client abort stops the wait |
   | `POST /api/fs/open` | reveal a folder in the OS file manager on the server machine (the card's "jump to project folder" button); body `{path}` |
   | `POST /api/avatars` | upload an agent avatar image (multipart field `file`, ≤2 MiB, PNG/JPEG/GIF/WebP); returns `{"path": "/api/avatars/<id>.<ext>"}` |
   | `GET /api/avatars/*` | serve stored avatar images |

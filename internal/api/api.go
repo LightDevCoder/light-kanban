@@ -2,6 +2,7 @@
 package api
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/json"
 	"errors"
@@ -42,7 +43,7 @@ func New(s *store.Store, ui fs.FS, avatarsDir string) http.Handler {
 	})
 	r.Get("/api/agents", handleListAgents(s))
 	r.Post("/api/agents", handleUpsertAgent(s))
-	r.Get("/api/fs/dirs", handleBrowseDirs())
+	r.Post("/api/fs/pick", handlePickDir())
 	r.Post("/api/fs/open", handleOpenDir())
 	r.Post("/api/avatars", handleUploadAvatar(avatarsDir))
 	r.Get("/api/avatars/*", handleAvatarFile(avatarsDir))
@@ -362,63 +363,6 @@ func handleUpsertAgent(s *store.Store) http.HandlerFunc {
 	}
 }
 
-// handleBrowseDirs lists the subdirectories of an absolute path, so the
-// human can pick a workspace folder by browsing instead of typing. Only
-// directory names are returned (never file contents); ".." components and
-// relative paths are rejected. Empty path lists platform roots.
-func handleBrowseDirs() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		raw := filepath.FromSlash(strings.TrimSpace(r.URL.Query().Get("path")))
-		if raw == "" {
-			writeJSON(w, http.StatusOK, map[string]any{"path": "", "dirs": platformRoots()})
-			return
-		}
-		if !filepath.IsAbs(raw) {
-			writeError(w, http.StatusBadRequest, fmt.Sprintf("path must be absolute: got %q", r.URL.Query().Get("path")))
-			return
-		}
-		// Check ".." on the raw path: filepath.Clean would swallow it.
-		for _, part := range strings.Split(raw, string(filepath.Separator)) {
-			if part == ".." {
-				writeError(w, http.StatusBadRequest, "path must not contain '..'")
-				return
-			}
-		}
-		clean := filepath.Clean(raw)
-		entries, err := os.ReadDir(clean)
-		if err != nil {
-			if os.IsNotExist(err) {
-				writeError(w, http.StatusNotFound, "path not found")
-				return
-			}
-			writeError(w, http.StatusInternalServerError, "read dir: "+err.Error())
-			return
-		}
-		dirs := []string{}
-		for _, e := range entries {
-			if e.IsDir() {
-				dirs = append(dirs, filepath.Join(clean, e.Name()))
-			}
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"path": clean, "dirs": dirs})
-	}
-}
-
-// platformRoots returns the top-level directories to start browsing from.
-func platformRoots() []string {
-	if runtime.GOOS != "windows" {
-		return []string{"/"}
-	}
-	roots := []string{}
-	for c := 'A'; c <= 'Z'; c++ {
-		p := string(c) + `:\`
-		if _, err := os.Stat(p); err == nil {
-			roots = append(roots, p)
-		}
-	}
-	return roots
-}
-
 // maxAvatarBytes caps uploaded avatar images at 2 MiB.
 const maxAvatarBytes = 2 << 20
 
@@ -558,6 +502,81 @@ func defaultOpenFolder(path string) error {
 		return fmt.Errorf("open folder not supported on %s", runtime.GOOS)
 	}
 	return cmd.Start()
+}
+
+// pickDir opens the server's native folder picker and returns the chosen
+// absolute path ("" when the user cancels). Injectable for tests.
+var pickDir = defaultPickDir
+
+// handlePickDir lets the operator pick a workspace folder with the real OS
+// dialog (the board runs on their own machine). Browsers never expose
+// absolute paths from their own pickers, so the server opens its own. If the
+// client aborts the request (the UI's cancel button), the wait ends early.
+func handlePickDir() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Minute)
+		defer cancel()
+		path, err := pickDirWith(ctx)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "folder picker failed: "+err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"path": path})
+	}
+}
+
+func pickDirWith(ctx context.Context) (string, error) {
+	done := make(chan struct {
+		path string
+		err  error
+	}, 1)
+	go func() {
+		p, err := pickDir()
+		done <- struct {
+			path string
+			err  error
+		}{p, err}
+	}()
+	select {
+	case res := <-done:
+		return res.path, res.err
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+}
+
+// defaultPickDir shells out to the platform's native folder dialog. On macOS
+// the osascript process activates itself first so the dialog pops in front
+// instead of hiding behind other windows — the old "hang" was a hidden
+// dialog waiting to be answered, not a crash.
+func defaultPickDir() (string, error) {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		script := `Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.FolderBrowserDialog; if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { $d.SelectedPath }`
+		cmd = exec.Command("powershell.exe", "-NoProfile", "-STA", "-Command", script)
+	case "darwin":
+		cmd = exec.Command("osascript", "-e", `tell me to activate`, "-e", `POSIX path of (choose folder)`)
+	case "linux":
+		if _, err := exec.LookPath("zenity"); err == nil {
+			cmd = exec.Command("zenity", "--file-selection", "--directory")
+		} else if _, err := exec.LookPath("kdialog"); err == nil {
+			cmd = exec.Command("kdialog", "--getexistingdirectory")
+		} else {
+			return "", errors.New("no folder picker available (zenity/kdialog)")
+		}
+	default:
+		return "", fmt.Errorf("folder picker not supported on %s", runtime.GOOS)
+	}
+	out, err := cmd.Output()
+	if err != nil {
+		// Canceled dialogs exit non-zero with no path.
+		if len(strings.TrimSpace(string(out))) == 0 {
+			return "", nil
+		}
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
 // decodeOptionalJSON decodes a request body that may legitimately be absent

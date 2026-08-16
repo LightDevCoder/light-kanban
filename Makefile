@@ -39,9 +39,9 @@ cross: frontend-build
 	GOOS=windows GOARCH=amd64 $(GO) build -o $(DIST)/light-kanban.exe ./cmd/light-kanban
 
 run:
-	$(GO) run ./cmd/light-kanban -addr :8080
+	$(GO) run ./cmd/light-kanban -addr :8641
 
-# Frontend dev server (proxies /api to the Go backend on :8080).
+# Frontend dev server (proxies /api to the Go backend on :8641).
 dev-frontend:
 	cd $(FRONTEND_DIR) && $(NPM) run dev
 

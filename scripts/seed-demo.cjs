@@ -3,7 +3,7 @@
  * Seed a RUNNING Light-Kanban with realistic demo data (density test +
  * screenshot-ready board). API-only: drives the same endpoints agents use.
  *
- *   node scripts/seed-demo.cjs                # seed http://localhost:8080
+ *   node scripts/seed-demo.cjs                # seed http://localhost:8641
  *   LK_BASE=http://localhost:9090 node scripts/seed-demo.cjs
  *   node scripts/seed-demo.cjs --force        # seed even if tasks exist
  *
@@ -22,7 +22,7 @@
 const fs = require('fs')
 const path = require('path')
 
-const BASE = (process.env.LK_BASE || 'http://localhost:8080').replace(/\/$/, '')
+const BASE = (process.env.LK_BASE || 'http://localhost:8641').replace(/\/$/, '')
 const FORCE = process.argv.includes('--force')
 const HOME = process.env.HOME
 const P = `${HOME}/Documents/Projects`

@@ -25,7 +25,7 @@
 
 - **单 Go 二进制**：REST API（chi）+ SQLite（modernc.org/sqlite，纯 Go 无 CGO）+ `go:embed` 网页
 - `cmd/light-kanban/main.go` — 入口（自动开浏览器在这里）
-- `internal/api/` — HTTP API（含 `api_test.go`）
+- `internal/api/` — HTTP API（含 `api_test.go`、`pick_test.go`）
 - `internal/store/` — SQLite 存取 + 状态机（含 `store_test.go`，并发/原子性）
 - `internal/webui/` — `webui.go` embed `dist/`；`dist/` 是**提交进仓库**的前端构建产物
 - `frontend/` — React 源码（api/ components/ features/ hooks/ i18n/ styles/ types/ utils/）

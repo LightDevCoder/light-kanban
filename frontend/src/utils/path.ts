@@ -11,18 +11,3 @@ export function workspaceName(path: string): string {
   if (!last || /^[A-Za-z]:$/.test(last)) return trimmed
   return last
 }
-
-/** A path the server will accept as absolute (POSIX or Windows). */
-export function isAbsolutePath(p: string): boolean {
-  return p.startsWith('/') || /^[A-Za-z]:[\\/]/.test(p)
-}
-
-/** Parent of an absolute path ('' = show roots). Handles C:\ and / styles. */
-export function parentOf(path: string): string {
-  if (!path) return ''
-  const parts = path.replace(/\\/g, '/').split('/').filter(Boolean)
-  parts.pop()
-  if (!parts.length) return ''
-  if (/^[A-Za-z]:$/.test(parts[0])) return parts[0] + ':\\'
-  return '/' + parts.join('/')
-}

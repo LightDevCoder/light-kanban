@@ -5,7 +5,7 @@ A single-binary Go kanban board: a human queues tasks (each card points at a wor
 ## Layout
 
 - `cmd/light-kanban/main.go` — entrypoint (flags, auto-opens the browser)
-- `internal/api/` — HTTP API (+ `api_test.go`)
+- `internal/api/` — HTTP API (+ `api_test.go`, `pick_test.go`)
 - `internal/store/` — SQLite store + state machine (+ `store_test.go`)
 - `internal/webui/` — `webui.go` embeds `dist/` via `go:embed`; **`dist/` is the committed production build of the frontend**
 - `frontend/` — React 18 + TypeScript + Vite app (the real UI source; see ADR-0002)
@@ -14,8 +14,8 @@ A single-binary Go kanban board: a human queues tasks (each card points at a wor
 ## Run / build / test
 
 - **Toolchain gotcha (Windows)**: Go is not on PATH. Source `scripts/goenv.ps1` first (PowerShell; it points GOROOT/GOPATH/GOCACHE at `.tools/`). macOS/Linux: `brew install go`, then use the `Makefile`.
-- **Run**: `make build && ./dist/light-kanban` (Windows: `.\dist\light-kanban.exe -addr :8080`) → http://localhost:8080.
-- **Frontend dev**: `make frontend-install` once, then `make dev-frontend` (Vite on :5173, proxies `/api` to a Go backend on :8080). Production staging: `make frontend-build` rebuilds and copies `frontend/dist` → `internal/webui/dist` (commit the result with your change).
+- **Run**: `make build && ./dist/light-kanban` (Windows: `.\dist\light-kanban.exe -addr :8641`) → http://localhost:8641.
+- **Frontend dev**: `make frontend-install` once, then `make dev-frontend` (Vite on :5173, proxies `/api` to a Go backend on :8641). Production staging: `make frontend-build` rebuilds and copies `frontend/dist` → `internal/webui/dist` (commit the result with your change).
 - **Test**: `go test ./...` — tests live at the two agreed seams: HTTP API (`internal/api/api_test.go`) and the store (`internal/store/store_test.go`). The committed `internal/webui/dist` keeps these green on a fresh clone without npm.
 - **Vet / format**: `go vet ./...`; `gofmt -l internal cmd scripts` (never `gofmt -l .` — `.tools/` is the vendored toolchain).
 - **Cross-compile**: `make cross` (or `scripts\cross-build.ps1`) → `dist/` binaries: linux (amd64), darwin (amd64 + arm64), windows (amd64). Both build the frontend first.

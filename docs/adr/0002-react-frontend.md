@@ -26,7 +26,7 @@ while keeping the Go single-binary product shape unchanged.
 ## Build / embed pipeline
 
 - `frontend/` is a standard Vite app. Dev: `npm run dev` (proxies `/api` to
-  the Go backend on :8080). Prod: `npm run build`.
+  the Go backend on :8641). Prod: `npm run build`.
 - `make frontend-build` builds and copies `frontend/dist/` →
   `internal/webui/dist/`, which `internal/webui/webui.go` embeds with
   `go:embed all:dist`.

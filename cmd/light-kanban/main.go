@@ -16,7 +16,7 @@ import (
 )
 
 func main() {
-	addr := flag.String("addr", ":8080", "listen address")
+	addr := flag.String("addr", ":8641", "listen address")
 	dbPath := flag.String("db", "kanban.db", "SQLite database path (:memory: accepted)")
 	avatarsDir := flag.String("avatars", "avatars", "directory for uploaded agent avatar images")
 	noOpen := flag.Bool("no-open", false, "do not open the browser on startup")

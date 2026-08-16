@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useI18n } from '../../i18n'
 import { BOARD_COLUMNS, type Status, type Task } from '../../types'
-import { FolderBrowserDialog } from '../FolderBrowser/FolderBrowserDialog'
+import { pickFolder } from '../../api/filesystem'
 
 export interface TaskFormValues {
   title: string
@@ -20,8 +20,8 @@ function toLocalInput(iso: string | null | undefined): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-// Shared create/edit form. The workspace field has a single「浏览…」entry —
-// the in-page server folder browser (no native system picker).
+// Shared create/edit form. The workspace path can be typed/pasted directly,
+// or picked with the server machine's native folder dialog via「选择…」.
 export function TaskForm({
   initial,
   isEdit,
@@ -42,9 +42,30 @@ export function TaskForm({
   const [tagsText, setTagsText] = useState((initial?.tags ?? []).join(', '))
   const [dueLocal, setDueLocal] = useState(toLocalInput(initial?.dueAt))
   const [status, setStatus] = useState<Status>(initial?.status ?? 'todo')
-  const [browseOpen, setBrowseOpen] = useState(false)
+  const [picking, setPicking] = useState(false)
+  const pickAbort = useRef<AbortController | null>(null)
 
   const prefix = isEdit ? 'edit' : 'add'
+
+  // The native dialog opens on the server machine; while it is up, the HTTP
+  // request stays open. The button turns into a waiting state with a cancel
+  // that aborts the request (the server then stops waiting too).
+  const systemPick = async () => {
+    const ctl = new AbortController()
+    pickAbort.current = ctl
+    setPicking(true)
+    try {
+      const res = await pickFolder(ctl.signal)
+      if (res.path) setWorkspacePath(res.path)
+    } catch (err) {
+      if (!ctl.signal.aborted) {
+        alert(t('alert.pickFailed', { e: err instanceof Error ? err.message : String(err) }))
+      }
+    } finally {
+      setPicking(false)
+      pickAbort.current = null
+    }
+  }
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -79,10 +100,17 @@ export function TaskForm({
             required
             placeholder={isEdit ? undefined : t('add.phWorkspace')}
           />
-          <button type="button" className="btn sm" title={t('browse.browseTitle')} onClick={() => setBrowseOpen(true)}>
-            {t('browse.browse')}
-          </button>
+          {picking ? (
+            <button type="button" className="btn sm" onClick={() => pickAbort.current?.abort()}>
+              {t('pick.cancelWait')}
+            </button>
+          ) : (
+            <button type="button" className="btn sm" title={t('pick.chooseTitle')} onClick={() => void systemPick()}>
+              {t('pick.choose')}
+            </button>
+          )}
         </span>
+        {picking && <span className="pick-waiting">{t('pick.waiting')}</span>}
       </label>
       <label className="form-field">
         <span>{t(`${prefix}.descField`)}</span>
@@ -125,15 +153,6 @@ export function TaskForm({
           {t('common.cancel')}
         </button>
       </div>
-      {browseOpen && (
-        <FolderBrowserDialog
-          onSelect={(p) => {
-            setWorkspacePath(p)
-            setBrowseOpen(false)
-          }}
-          onClose={() => setBrowseOpen(false)}
-        />
-      )}
     </form>
   )
 }
