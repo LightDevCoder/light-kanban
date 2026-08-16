@@ -1,0 +1,57 @@
+name: CI
+
+# v1.0.3 Fix 5: every push to main and every PR must pass the full local
+# check battery before merging: frontend build, embedded dist sync, gofmt,
+# go vet, go test.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24 # current stable LTS for Vite 5
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies (npm ci)
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend (tsc --noEmit + vite build)
+        working-directory: frontend
+        run: npm run build
+
+      # The Go binary embeds internal/webui/dist; it must always match the
+      # React source in the same commit, or a shipped binary silently keeps
+      # the old UI.
+      - name: Verify embedded dist matches frontend source
+        run: |
+          rm -rf internal/webui/dist
+          cp -R frontend/dist internal/webui/dist
+          if ! git diff --exit-code -- internal/webui/dist; then
+            echo "::error::frontend source and committed internal/webui/dist are out of sync — run 'make frontend-build' and commit the result"
+            exit 1
+          fi
+
+      - name: gofmt check (never scan .tools/)
+        run: test -z "$(gofmt -l cmd internal scripts)"
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test ./...

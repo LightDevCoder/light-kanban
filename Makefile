@@ -5,7 +5,7 @@ NPM ?= npm
 FRONTEND_DIR := frontend
 WEBUI_DIST := internal/webui/dist
 
-.PHONY: build test vet cross run clean frontend-install frontend-build dev-frontend
+.PHONY: build test vet cross run clean frontend-install frontend-build dev-frontend check
 
 # Install frontend deps exactly from the lockfile (first run / after upgrades).
 frontend-install:
@@ -37,6 +37,15 @@ cross: frontend-build
 	GOOS=darwin GOARCH=amd64 $(GO) build -o $(DIST)/light-kanban-darwin-amd64 ./cmd/light-kanban
 	GOOS=darwin GOARCH=arm64 $(GO) build -o $(DIST)/light-kanban-darwin-arm64 ./cmd/light-kanban
 	GOOS=windows GOARCH=amd64 $(GO) build -o $(DIST)/light-kanban.exe ./cmd/light-kanban
+
+# Pre-commit gate (SPEC v1.0.3 Fix 6): rebuild the frontend, verify the
+# committed embedded dist matches the source, and run every Go check.
+# CI (.github/workflows/ci.yml) runs the same steps.
+check: frontend-build
+	test -z "$$(gofmt -l cmd internal scripts)"
+	$(GO) vet ./...
+	$(GO) test ./...
+	git diff --exit-code -- $(WEBUI_DIST)
 
 run:
 	$(GO) run ./cmd/light-kanban -addr :8641
