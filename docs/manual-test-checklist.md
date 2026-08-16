@@ -2,17 +2,17 @@
 
 > 照着下表把功能都点一遍，在「结果」列打 ✅ / ❌；想给我留言就写在「评论（留给我）」列，然后告诉我一声，我会读这个文件逐条回复。
 > 想用 Excel 测：打开 `docs/light-kanban-验收清单.xlsx`（同一份清单，「结果」列带 ✅ 通过 / ❌ 失败 / ⚠ 存疑 下拉选项）。改动清单后可用 `node scripts/make-checklist-xlsx.cjs` 重新生成。
-> 前提：用最新二进制启动服务（`./dist/light-kanban -addr :8641`），浏览器打开 http://localhost:8641 并**硬刷新**（Ctrl+F5 / Cmd+Shift+R，避免旧页面缓存）。
+> 前提：用最新二进制以**默认模式**启动服务（`./dist/light-kanban`，不加 `-addr`，只监听本机 127.0.0.1:8641），浏览器打开 http://127.0.0.1:8641 并**硬刷新**（Ctrl+F5 / Cmd+Shift+R，避免旧页面缓存）。局域网访问只在第 O 节单独测试。
 > 想看高密度效果：服务运行中执行 `node scripts/seed-demo.cjs` 灌入 35 条演示任务。
 
 ## A. 启动与页面
 
 | # | 测什么 | 怎么测 | 预期结果 | 结果 | 评论（留给我） |
 |---|--------|--------|----------|------|--------------|
-| A1 | 服务启动 | 运行 `./dist/light-kanban -addr :8641` | 命令行出现 `listening on :8641`，不报错 | |
-| A1b | 双击启动（Windows） | 直接双击 `dist\light-kanban.exe` | 弹出控制台窗口并**自动打开浏览器** http://localhost:8641 | |
-| A2 | 健康检查 | 浏览器开 http://localhost:8641/api/health | 显示 `{"db":"ok","status":"ok"}` | |
-| A3 | 页面加载 | 打开 http://localhost:8641 | 浅色顶栏（Light Kanban / 任务看板）+ 四列看板，无弹窗遮盖，无深色大 Header | |
+| A1 | 服务启动 | 运行 `./dist/light-kanban`（默认，不加 `-addr`） | 命令行出现 `listening on 127.0.0.1:8641`，不报错；本机打开 http://127.0.0.1:8641 正常 | |
+| A1b | 双击启动（Windows） | 直接双击 `dist\light-kanban.exe` | 弹出控制台窗口并**自动打开浏览器** http://127.0.0.1:8641 | |
+| A2 | 健康检查 | 浏览器开 http://127.0.0.1:8641/api/health | 显示 `{"db":"ok","status":"ok"}` | |
+| A3 | 页面加载 | 打开 http://127.0.0.1:8641 | 浅色顶栏（Light Kanban / 任务看板）+ 四列看板，无弹窗遮盖，无深色大 Header | |
 | A4 | 连接指示 | 正常时看顶栏右侧 | **没有**常亮绿色状态点；停掉服务后出现红色「连接失败」 | |
 | A5 | 首次引导 | 新开无痕窗口（或清掉 localStorage `lk-wizard-seen`）打开页面 | 自动弹出 4 步引导向导，可上一步 / 下一步 / 跳过 | |
 | A6 | 重开向导 | 跳过向导 → 顶栏右侧设置（齿轮）→「使用向导」 | 向导随时能重新打开 | |
@@ -147,7 +147,7 @@
 
 | # | 测什么 | 怎么测 | 预期结果 | 结果 | 评论（留给我） |
 |---|--------|--------|----------|------|--------------|
-| N1 | Apple Silicon | `chmod +x` 后运行 `./light-kanban-darwin-arm64 -addr :8641` | 正常启动，页面功能同 Windows | |
+| N1 | Apple Silicon | `chmod +x` 后运行 `./light-kanban-darwin-arm64`（默认模式） | 正常启动，监听 127.0.0.1:8641，页面功能同 Windows | |
 | N2 | Intel Mac | 用 `dist/light-kanban-darwin-amd64` | 同上 | |
 | N3 | Gatekeeper | 首次运行若提示"无法验证开发者" | 右键 → 打开，或 `xattr -dr com.apple.quarantine ./light-kanban-darwin-arm64` 后重试 | |
 

@@ -1,14 +1,14 @@
 # PROGRESS — 项目进度与交接记录
 
 > 本文档记录 Light-Kanban 的当前进度、约定、待办与 Mac 迁移指引，供后续维护者快速接上手。
-> 最后更新：2026-08-16（v1.0.3 加固已实现，待发布）
+> 最后更新：2026-08-16（v1.0.3 已发布）
 
 ## 1. 当前状态
 
 - **远端仓库**：https://github.com/LightDevCoder/light-kanban（public，gh 账号 LightDevCoder）
-- **最新发布**：`v1.0.2`（UI/UX 重构，React 前端），4 个平台二进制齐全
-- **当前工作**：`v1.0.3` 加固 release（见 §2b）已实现并提交，发布时打 tag `v1.0.3` + `gh release create` 附 4 个二进制
-- **工作树**：基于 origin/main 的 v1.0.2 之后的最新 commit
+- **最新发布**：`v1.0.3`（hardening release），4 个平台二进制齐全（tag `v1.0.3` 指向发布时 commit；之后 main 上只有纯维护 commit）
+- **当前工作**：无进行中的 release；v1.0.3 为最新稳定版本，后续改动等待真实使用反馈（不主动规划 v1.0.4）
+- **工作树**：与 origin/main 一致
 
 ## 2. v1.0.2 已实现（已发布）
 
@@ -21,7 +21,7 @@
 - **种子脚本**：`node scripts/seed-demo.cjs`（35 任务 / 3 Agent / 4 workspace，覆盖密度测试与截图场景）
 - 双语 UI（中文 / English）完整保留；5s 轮询保留（TanStack Query refetchInterval）
 
-## 2b. v1.0.3 加固已实现（待发布）
+## 2b. v1.0.3 加固（已发布）
 
 - **默认监听收紧**：默认 `-addr 127.0.0.1:8641`（仅本机；v1 无认证）。LAN agent 场景显式 `-addr :8641` / `0.0.0.0:8641` 才对外。`browserURL` 与默认地址有 `cmd/light-kanban/main_test.go` 微接缝测试
 - **status 过滤补全**：`GET /api/tasks?status=` 支持 `active`（默认）/`todo`/`in_progress`/`blocked`/`awaiting_confirmation`/`archived`；非法值 400。Store `ListTasks` 支持五个状态 token + 空（active 在 HTTP 层映射为空）；合法状态白名单收敛为 `store.ValidStatus` 单点
@@ -61,7 +61,6 @@
 - [x] **用户本地验收 v1.0.2**（SPEC 第 49 节清单）
 - [x] **新版截图**：中文 + English 各一张 → `Assets/light-kanban-CN.png` / `Assets/light-kanban-EN.png`（v1.0.2 发布时已入库）
 - [ ] **验收清单未回填**：`docs/manual-test-checklist.md` 的「结果 / 评论」列，用户测完逐条回填
-- [ ] **v1.0.3 发布**：本地验收通过后打 tag `v1.0.3` + `gh release create` 附 4 个二进制（见 §4 发布流程）
 - [ ] **未决产品问题**：agentId 是否需要格式约束（如禁止空格）——等用户拍板
 - [ ] 明确不做（out of scope）：推送通知、WebSocket、多看板、TTL 自动回收、认证、自由拖拽换列
 

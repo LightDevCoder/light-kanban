@@ -5,7 +5,7 @@ NPM ?= npm
 FRONTEND_DIR := frontend
 WEBUI_DIST := internal/webui/dist
 
-.PHONY: build test vet cross run clean frontend-install frontend-build dev-frontend check
+.PHONY: build test vet cross run run-lan clean frontend-install frontend-build dev-frontend check
 
 # Install frontend deps exactly from the lockfile (first run / after upgrades).
 frontend-install:
@@ -47,7 +47,13 @@ check: frontend-build
 	$(GO) test ./...
 	git diff --exit-code -- $(WEBUI_DIST)
 
+# Run with the program's own default: loopback-only (127.0.0.1:8641).
 run:
+	$(GO) run ./cmd/light-kanban
+
+# Explicit LAN opt-in for development — binds all interfaces so agents on
+# other machines can connect. Never the default; use it deliberately.
+run-lan:
 	$(GO) run ./cmd/light-kanban -addr :8641
 
 # Frontend dev server (proxies /api to the Go backend on :8641).

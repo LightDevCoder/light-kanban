@@ -98,9 +98,11 @@ chmod +x light-kanban-linux-amd64
 
 ```sh
 make build            # 构建前端 → 拷入 internal/webui/dist → 编译二进制
-./dist/light-kanban -addr :8641 -db kanban.db
-# 打开 http://localhost:8641
+./dist/light-kanban -db kanban.db
+# 打开 http://127.0.0.1:8641
 ```
+
+要让**其他电脑**上的 Agent 连过来（显式开放局域网）：`./dist/light-kanban -addr :8641`。
 
 参数：
 
@@ -116,6 +118,7 @@ make build            # 构建前端 → 拷入 internal/webui/dist → 编译�
 
 - 测试跑在 HTTP API 与 SQLite store 两个接缝上（见 spec.md 的 Testing Decisions）；`go test ./...` 跑全量。前端产物已提交在 `internal/webui/dist/`，fresh clone 不装 npm 也能通过。
 - **提交前检查：`make check`**——重建前端，若提交的 `internal/webui/dist/` 与 `frontend/src/` 不同步则失败，然后跑 gofmt / `go vet` / `go test`。CI（`.github/workflows/ci.yml`）对每次 push 到 main 和每个 PR 执行同样检查。
+- `make run` 以默认的本机监听启动 Go 后端；`make run-lan` 是显式开放局域网的变体（绑定全部网卡），用于测试远端 agent。
 - 网页 UI 是 `frontend/` 下的 React 18 + TypeScript + Vite 应用（见 ADR-0002）：首次 `make frontend-install`；开发用 `make dev-frontend`（Vite :5173，代理 `/api` 到 :8641 的 Go 后端）；`make frontend-build` 把生产包 staged 到 `internal/webui/dist/`。
 - `make cross`（Windows 用 `scripts/cross-build.ps1`）产出 `dist/` 下的发布二进制：linux (amd64)、darwin (amd64 + arm64)、windows (amd64)——两者都会先构建前端。
 - `node scripts/seed-demo.cjs` 给运行中的看板灌入演示数据（35 任务 / 3 agent），用于密度测试与截图。

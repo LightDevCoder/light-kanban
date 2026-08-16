@@ -98,9 +98,11 @@ Five steps get you from zero to a full loop (the web UI also shows the same guid
 
 ```sh
 make build            # builds the frontend, stages internal/webui/dist, compiles the binary
-./dist/light-kanban -addr :8641 -db kanban.db
-# open http://localhost:8641
+./dist/light-kanban -db kanban.db
+# open http://127.0.0.1:8641
 ```
+
+To explicitly allow agents on other LAN machines: `./dist/light-kanban -addr :8641`.
 
 Flags:
 
@@ -116,6 +118,7 @@ Flags:
 
 - Go tests run against the HTTP API and the SQLite store (see spec.md's Testing Decisions); `go test ./...` runs the whole suite. The committed `internal/webui/dist/` keeps this green on a fresh clone — no npm needed for backend work.
 - **Pre-commit gate: `make check`** — rebuilds the frontend, fails if the committed `internal/webui/dist/` is out of sync with `frontend/src/`, then runs gofmt / `go vet` / `go test`. CI (`.github/workflows/ci.yml`) runs the same checks on every push to main and every PR.
+- `make run` starts the Go backend with its loopback-only default; `make run-lan` is the explicit LAN variant (binds all interfaces) for testing remote agents.
 - The web UI is a React 18 + TypeScript + Vite app in `frontend/` (ADR-0002): `make frontend-install` once, `make dev-frontend` for the Vite dev server (proxies `/api` to a Go backend on :8641), `make frontend-build` to stage the production bundle into `internal/webui/dist/`.
 - `make cross` (or `scripts/cross-build.ps1` on Windows) produces the release binaries under `dist/`: linux (amd64), darwin (amd64 + arm64), windows (amd64) — both build the frontend first.
 - `node scripts/seed-demo.cjs` seeds a running board with realistic demo data (35 tasks / 3 agents) for density checks and screenshots.
