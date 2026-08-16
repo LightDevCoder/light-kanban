@@ -8,7 +8,18 @@
 
 ## 界面截图
 
-![Light-Kanban 看板界面](Assets/light-kanban-example.png)
+![Light-Kanban 看板界面（中文）](Assets/light-kanban-CN.png)
+
+(English UI screenshot: see [README.md](README.md))
+
+## 看板一览
+
+- **固定四列状态** —— 待处理 / 处理中 / 遇到阻碍 / 等你确认 —— 列头固定、每列独立滚动；窗口变窄时看板横向滚动，不会重排成单列。
+- **高密度紧凑卡片**：短号（`LK-XXXX`）、标题、接取 agent 的头像、workspace 文件夹名（带颜色点）、最多两个标签 `+N`，只有截止 / 逾期 / 疑似卡住 / 阻碍原因这类真正需要关注的信号才带颜色。
+- **任务抽屉**：点任意卡片从右侧打开完整详情——默认查看模式，需要时再进入编辑。人类的主要操作都在这里：**验收通过**（归档）、**退回修改**（带反馈退回处理中，agent 可通过 API 读到）、**回收到待处理**（疑似卡住任务）、删除、打开项目文件夹。
+- **顶栏搜索与筛选**：匹配标题 / 描述 / workspace / 标签 / Agent 名；筛选支持 Agent + Workspace + 标签 + 状态自由组合，结果直接作用在看板上。
+- **设置菜单**：界面语言（中文 / English）、使用向导、归档历史（单条 / 全选删除）。
+- **完整双语界面**，按浏览器记忆选择；5 秒轻量轮询（无需 WebSocket）。
 
 ## 安装与运行（按平台）
 
@@ -61,11 +72,11 @@ chmod +x light-kanban-linux-amd64
 
 ## Quick Start
 
-跑通「建任务 → agent 接取 → 干活 → 验收归档」只需 5 步（首次打开网页时也有同款引导向导，之后可点顶栏「使用向导」随时重看）：
+跑通「建任务 → agent 接取 → 干活 → 验收归档」只需 5 步（首次打开网页时也有同款引导向导，之后可在右上「设置」菜单里随时重看）：
 
 1. **启动服务**：`dist\light-kanban.exe -addr :8080`（Windows；其他平台 `make build && ./dist/light-kanban`），浏览器打开 http://localhost:8080。
 
-2. **添加任务**：点右上「＋ 添加任务」，填标题 + workspace 文件夹路径（可「浏览…」或「系统选择…」），描述 / 标签 / 截止时间可选 → 任务出现在**待处理**列。
+2. **添加任务**：点顶栏右侧「**+**」（或待处理列标题右侧的「+」），填标题 + workspace 文件夹路径（可「浏览…」或「系统选择…」），描述 / 标签 / 截止时间可选 → 任务出现在**待处理**列。
 
 3. **Agent 接取**（agent 通过 API 自己注册并接取）：
 
@@ -77,16 +88,16 @@ chmod +x light-kanban-linux-amd64
      http://localhost:8080/api/tasks/<id>/claim
    ```
 
-   接取约束：`name` 用你的工具名，`avatar` 必须是真实图片（上传的路径或 http(s) 图片 URL），伪造路径会被 422 拒绝。接取后卡片显示该 agent 的头像和名称。
+   接取约束：`name` 用你的工具名，`avatar` 必须是真实图片（上传的路径或 http(s) 图片 URL），伪造路径会被 422 拒绝。接取后卡片右上角显示该 agent 的头像。
 
-4. **干活与状态流转**（agent 通过 API）：`POST /api/tasks/<id>/block`（遇到阻碍）、`/unblock`（解除阻碍）、`/complete`（干完交回）。你只需看四列状态。
+4. **干活与状态流转**（agent 通过 API）：`POST /api/tasks/<id>/block`（可带 `{"reason":"…"}`，卡片会直接显示卡住原因）、`/unblock`（解除阻碍）、`/complete`（干完交回）。你只需看四列状态。
 
-5. **验收归档**：任务到**等你确认**后由你验收——通过则点卡片「验收通过（归档）」，任务进入「归档历史」（右上按钮打开弹窗，可单条 / 全选删除）；不通过就直接命令 agent 修改，它自己调 API 把任务退回**处理中**。
+5. **验收归档**：任务到**等你确认**后，悬停卡片或点卡打开抽屉——**验收通过**即归档（进「设置 → 归档历史」，可单条 / 全选删除）；**退回修改**则带着你的反馈退回**处理中**（agent 调 `POST /api/tasks/<id>/reject` 带 `{"feedback":"…"}` 亦可，反馈可从 `GET /api/tasks` 读到）。
 
-## Run
+## 从源码运行
 
 ```sh
-go build -o dist/light-kanban ./cmd/light-kanban
+make build            # 构建前端 → 拷入 internal/webui/dist → 编译二进制
 ./dist/light-kanban -addr :8080 -db kanban.db
 # 打开 http://localhost:8080
 ```
@@ -99,6 +110,7 @@ go build -o dist/light-kanban ./cmd/light-kanban
 
 ## Develop
 
-- 测试跑在 HTTP API 与 SQLite store 两个接缝上（见 spec.md 的 Testing Decisions）；`go test ./...` 跑全量。
-- `make cross`（Windows 用 `scripts/cross-build.ps1`）产出 `dist/` 下的发布二进制：linux (amd64)、darwin (amd64 + arm64)、windows (amd64)。
-- 网页是 `go:embed` 内嵌的纯静态文件——无前端构建步骤，直接改 `internal/webui/`。
+- 测试跑在 HTTP API 与 SQLite store 两个接缝上（见 spec.md 的 Testing Decisions）；`go test ./...` 跑全量。前端产物已提交在 `internal/webui/dist/`，fresh clone 不装 npm 也能通过。
+- 网页 UI 是 `frontend/` 下的 React 18 + TypeScript + Vite 应用（见 ADR-0002）：首次 `make frontend-install`；开发用 `make dev-frontend`（Vite :5173，代理 `/api` 到 :8080 的 Go 后端）；`make frontend-build` 把生产包 staged 到 `internal/webui/dist/`。
+- `make cross`（Windows 用 `scripts/cross-build.ps1`）产出 `dist/` 下的发布二进制：linux (amd64)、darwin (amd64 + arm64)、windows (amd64)——两者都会先构建前端。
+- `node scripts/seed-demo.cjs` 给运行中的看板灌入演示数据（35 任务 / 3 agent），用于密度测试与截图。

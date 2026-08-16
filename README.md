@@ -12,6 +12,15 @@ See `.scratch/task-board/spec.md` for the full spec, the state machine, and the 
 
 (中文界面截图见 [README_CN.md](README_CN.md))
 
+## The board at a glance
+
+- **Four fixed state columns** — To Do / In Progress / Blocked / Awaiting Confirmation — with pinned headers and independent per-column scrolling; narrow windows scroll the board horizontally instead of restacking.
+- **Compact, high-density cards**: short id (`LK-XXXX`), title, the claiming agent's avatar, workspace basename with a color dot, a couple of tags `+N`, and due / overdue / stuck / block-reason signals only when they matter.
+- **Task drawer**: click any card for the full picture in a right-side drawer — view first, edit on demand. This is also where the human acts: **Accept** (archive), **Request Changes** (rejects back to In Progress with feedback the agent can read via the API), **Recycle to To Do** for suspected-stuck tasks, delete, and open the project folder.
+- **Search & filters** in the topbar: match title / description / workspace / tags / agent name, and compose Agent + Workspace + Tag + Status filters — the board updates in place.
+- **Settings menu**: language (中文 / English), the onboarding guide, and the archive history (single / select-all delete).
+- **Bilingual UI** throughout, remembered per browser; the board polls lightly every 5 s (no WebSocket to run).
+
 ## Install & Run (per platform)
 
 Pick the file for your machine from the [Releases](https://github.com/LightDevCoder/light-kanban/releases) page:
@@ -63,11 +72,11 @@ The browser opens automatically; Ctrl+C stops. To allow other machines on the LA
 
 ## Quick Start
 
-Five steps get you from zero to a full loop (the web UI also shows the same guide on first visit — reopen it anytime with the "Guide" button):
+Five steps get you from zero to a full loop (the web UI also shows the same guide on first visit — reopen it anytime from the settings menu):
 
 1. **Start the service**: `dist\light-kanban.exe -addr :8080` on Windows (other platforms: `make build && ./dist/light-kanban`), then open http://localhost:8080.
 
-2. **Add a task**: click "+ Add Task" in the top bar, fill in the title + workspace folder path (browse in-page or use the system picker); description / tags / due date are optional → the task lands in the **To Do** column.
+2. **Add a task**: click "**+**" in the top bar (or the "+" in the To Do column header), fill in the title + workspace folder path (browse in-page or use the system picker); description / tags / due date are optional → the task lands in the **To Do** column.
 
 3. **An agent claims it** (agents self-register and claim via the API):
 
@@ -79,16 +88,16 @@ Five steps get you from zero to a full loop (the web UI also shows the same guid
      http://localhost:8080/api/tasks/<id>/claim
    ```
 
-   Claim constraints: `name` is your tool name; `avatar` must be a real image (an uploaded path or an http(s) image URL) — fabricated paths get a 422. The card then shows the agent's avatar and name.
+   Claim constraints: `name` is your tool name; `avatar` must be a real image (an uploaded path or an http(s) image URL) — fabricated paths get a 422. The card then shows the agent's avatar at its top right.
 
-4. **Work and status transitions** (agent, via API): `POST /api/tasks/<id>/block` (blocked), `/unblock` (unblocked), `/complete` (finished). You just watch the four columns.
+4. **Work and status transitions** (agent, via API): `POST /api/tasks/<id>/block` (optionally with `{"reason":"…"}` — the card shows why it is stuck), `/unblock`, `/complete`. You just watch the four columns.
 
-5. **Review and archive**: when a task reaches **Awaiting Confirmation**, review it — accept: click "Accept & Archive" on the card, it moves to the **Archive** modal (top-bar button; supports single and select-all delete); not good enough: just tell the agent to fix it, the agent moves the task back to **In Progress** via the API.
+5. **Review and archive**: when a task reaches **Awaiting Confirmation**, hover the card or open its drawer — **Accept** archives it into the **Archive** (settings menu; single and select-all delete); **Request Changes** sends it back to **In Progress** with your feedback (`POST /api/tasks/<id>/reject` with `{"feedback":"…"}` also works — the agent reads it back from `GET /api/tasks`).
 
-## Run
+## Run from source
 
 ```sh
-go build -o dist/light-kanban ./cmd/light-kanban
+make build            # builds the frontend, stages internal/webui/dist, compiles the binary
 ./dist/light-kanban -addr :8080 -db kanban.db
 # open http://localhost:8080
 ```
@@ -101,6 +110,7 @@ Flags:
 
 ## Develop
 
-- Tests run against the HTTP API and the SQLite store (see spec.md's Testing Decisions); `go test ./...` runs the whole suite.
-- `make cross` (or `scripts/cross-build.ps1` on Windows) produces the release binaries under `dist/`: linux (amd64), darwin (amd64 + arm64), windows (amd64).
-- The web UI is plain static files embedded via `go:embed` — no frontend build step; edit `internal/webui/`.
+- Go tests run against the HTTP API and the SQLite store (see spec.md's Testing Decisions); `go test ./...` runs the whole suite. The committed `internal/webui/dist/` keeps this green on a fresh clone — no npm needed for backend work.
+- The web UI is a React 18 + TypeScript + Vite app in `frontend/` (ADR-0002): `make frontend-install` once, `make dev-frontend` for the Vite dev server (proxies `/api` to a Go backend on :8080), `make frontend-build` to stage the production bundle into `internal/webui/dist/`.
+- `make cross` (or `scripts/cross-build.ps1` on Windows) produces the release binaries under `dist/`: linux (amd64), darwin (amd64 + arm64), windows (amd64) — both build the frontend first.
+- `node scripts/seed-demo.cjs` seeds a running board with realistic demo data (35 tasks / 3 agents) for density checks and screenshots.

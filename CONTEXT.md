@@ -67,3 +67,23 @@ _Avoid_: bounce, send back, redo
 **Agent**:
 An autonomous program with an id, name, and avatar that claims, works, and returns tasks through the board's API. It registers itself by supplying its identity when it first claims.
 _Avoid_: bot, worker, robot
+
+**任务抽屉 (Task drawer)**:
+The right-side panel that opens when a card is clicked: full task details in view mode first, with editing as an explicit switch. Carries the human's actions (accept / request changes / recycle / edit / delete / open folder).
+_Avoid_: modal, detail page, edit popup
+
+**退回修改 (Request changes)**:
+The human's rejection of a task in 等你确认 (等你确认 → 处理中), optionally with a written feedback message that the owning agent reads back through the task list API.
+_Avoid_: reject note, review comment
+
+**阻碍原因 (Block reason)**:
+The optional message an agent attaches when blocking a task, shown on the blocked card and in the drawer so the human knows why it is stuck.
+_Avoid_: blocker text, stall note
+
+**Workspace 筛选 (Workspace filter)**:
+The topbar filter facet that groups tasks by their workspace folder; options display as folder basenames (`light-kanban`, not the full path) but key on the full path.
+_Avoid_: project filter, repo filter
+
+**卡片短号 (Short id)**:
+The display-only `LK-XXXX` token on cards, derived from the task's real API id (which never changes and is what agents use).
+_Avoid_: issue number, sequence id

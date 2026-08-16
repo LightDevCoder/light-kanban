@@ -67,6 +67,8 @@ Status: ready-for-agent
     updatedAt      timestamp
     completedAt    timestamp?   // 验收归档时写入（完成日期）
     dueAt          timestamp?   // 可选截止
+    blockReason    string?      // block 时可选填入的阻碍原因，展示在卡片/详情（unblock 清除）
+    reviewFeedback string?      // reject 时可选填入的退回反馈，agent 可读（complete 清除）
   }
 
   Agent {
@@ -78,7 +80,7 @@ Status: ready-for-agent
 
 - **Atomic claim**: claiming is a conditional transition — it succeeds only if the task's current status is 待处理, enforced atomically by the store (single `UPDATE ... WHERE status='待处理'`). A losing concurrent claim gets a "conflict" response, never a duplicate.
 - **Concurrency model**: one task is held by at most one agent at a time; an agent may hold multiple tasks concurrently.
-- **Orphan reclaim**: no automatic lease/heartbeat/TTL in v1. The UI highlights a 处理中 task that has not been updated for a long time as "suspected stuck", and the human moves it back to 待处理 via the edit modal's 状态 field or `POST /api/tasks/:id/recycle` (no dedicated button — status transitions are agent API actions).
+- **Orphan reclaim**: no automatic lease/heartbeat/TTL in v1. The UI marks a 处理中 task that has not been updated for a long time as "suspected stuck" (a quiet ⚠ chip, no flashing), and the human moves it back to 待处理 via the task drawer's 回收到待处理 button, the drawer's edit-mode 状态 field, or `POST /api/tasks/:id/recycle`.
 - **Agent identity**: self-registration on claim, with enforced constraints — the claim request carries `agentId`, `name` and `avatar`, all required: `name` must be non-empty (the agent's tool name, e.g. "grok build"), and `avatar` must be an image that the server can verify — an uploaded `/api/avatars/...` path whose file actually exists (fabricated paths are rejected, so cards never show broken icons), or an http(s) image URL. A letter or emoji is rejected. Agents that skip or fake their identity get a 422 and must retry properly. The human can pre-configure agents or edit their identity afterwards; human-configured identities are **pinned** — later claims cannot overwrite them. No authentication in v1 (trust the local machine/network); identity is for display and ownership, not authorization.
 - **Task tags**: free-form labels, filled by agents (or the human); `completedAt` is recorded by the system on archive, not hand-entered. (A separate `type` field existed briefly; it was removed — tags already cover it.)
 - **API contract** (REST, JSON; no auth):
@@ -89,11 +91,11 @@ Status: ready-for-agent
   | `POST /api/tasks` | create a task (human) |
   | `PATCH /api/tasks/:id` | edit title/description/workspacePath/tags/dueAt, and manually correct `status` (human; user story 6) |
   | `POST /api/tasks/:id/claim` | 待处理 → 处理中; body `{agentId, name, avatar}` — `agentId`、`name` 必填（agent 工具名），`avatar` 必填且必须是图片（`/api/avatars/...` 且文件真实存在，或 http(s) 图片 URL）；注册时强制约束 |
-  | `POST /api/tasks/:id/block` | 处理中 → 遇到阻碍 |
-  | `POST /api/tasks/:id/unblock` | 遇到阻碍 → 处理中 |
-  | `POST /api/tasks/:id/complete` | 处理中 → 等你确认 |
+  | `POST /api/tasks/:id/block` | 处理中 → 遇到阻碍; 可选 body `{"reason": "…"}` 记录阻碍原因（展示在卡片与详情里，unblock 时清除） |
+  | `POST /api/tasks/:id/unblock` | 遇到阻碍 → 处理中（清除阻碍原因） |
+  | `POST /api/tasks/:id/complete` | 处理中 → 等你确认（清除退回反馈，新一轮验收重新开始） |
   | `POST /api/tasks/:id/archive` | 等你确认 → 已归档 (验收通过后) |
-  | `POST /api/tasks/:id/reject` | 等你确认 → 处理中 (验收不通过) |
+  | `POST /api/tasks/:id/reject` | 等你确认 → 处理中 (验收不通过)；可选 body `{"feedback": "…"}`，agent 通过 GET /api/tasks 读到（complete 时清除） |
   | `POST /api/tasks/:id/recycle` | 处理中 → 待处理, drops the claim (human; orphan reclaim, issue 07) |
   | `DELETE /api/tasks/:id` | delete a task entirely (human correction; removes it from the board and the archived history) |
   | `GET /api/agents` | list agents |
@@ -106,7 +108,7 @@ Status: ready-for-agent
 
 - **Realtime**: polling only, no WebSocket in v1. The web UI refreshes on an interval; single-user traffic makes this cheap.
 - **Startup UX**: on startup the service opens the default browser at the board URL (best effort, so a double-clicked binary is immediately usable; `-no-open` disables it). The console prints the listen address and the URL.
-- **Web UI**: the main page is just the four columns. 添加任务 and 归档历史 are top-bar buttons that open modals — task creation happens in a modal, and archived history is a modal list (per-item delete + select-all delete) so a long history never pushes content below the board. A first-run wizard (top-bar「使用向导」reopens it) walks the operator through the same four steps as the README Quick Start: add a task → the agent claims via API (self-registering identity) → the agent drives status transitions via API → the human accepts and archives. There is no agent registration form in the UI: agents self-register via the claim API, and their registered identity (image avatar + name) appears on the card once they work a task. The agentId exists only at the API layer (claiming/ownership — it is what distinguishes the same agent running in different sessions); the UI never displays it. Card buttons show only the human's real actions: 编辑/删除 on every column plus 验收通过（归档） on 等你确认. Status transitions (claim/block/unblock/complete/recycle/reject) are agent API actions and have no buttons — the human drives the agent directly, or corrects state manually through 编辑 → 状态.
+- **Web UI**: React + TypeScript + Vite (ADR-0002), embedded into the single binary via `go:embed`. The main page is the four fixed columns under a quiet topbar (brand / search / filter / settings /「+」create). Cards are compact scan units — display id (`LK-XXXX`, derived from the real id; the API id never changes), title, agent avatar at top-right, workspace basename with a hash-color dot, ≤2 tags `+N`, due/overdue/stuck chips, and the block reason line on blocked cards. Clicking a card opens a right-side **task drawer** with full details (view-first; editing title/workspacePath/description/tags/dueAt/status is an explicit mode). Review is the human's primary action: hovering an 等你确认 card — or opening its drawer — offers 验收通过 (archive) and 退回修改 (reject with a feedback message the agent reads back via the API). The drawer also carries 回收到待处理 for stuck 处理中 tasks, delete, and open-folder. Task creation is a compact dialog (topbar「+」or the 待处理 column header「+」). Archive history, the guide wizard and the language switch live in the topbar settings menu; the connection indicator only appears when the backend is unreachable. Column headers stay pinned while each column scrolls independently; narrow windows scroll the board horizontally instead of restacking columns. Search matches title/description/workspace/tags/agent name and filters compose (agent + workspace + tag + status) — both act on the board in place. There is no agent registration form in the UI: agents self-register via the claim API; the agentId exists only at the API layer and is never displayed. Card buttons show only the human's real actions — status transitions (claim/block/unblock/complete/recycle) remain agent API actions with no buttons.
 - **Board scope**: one global board in v1. All projects' tasks share the four columns; `workspacePath` and tags distinguish them. A `boardId` can be added later without breaking data.
 
 ## Testing Decisions
