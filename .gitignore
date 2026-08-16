@@ -24,3 +24,4 @@ avatars/
 # Editor/OS noise
 .DS_Store
 Thumbs.db
+.workbuddy/
