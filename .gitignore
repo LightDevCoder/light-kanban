@@ -4,6 +4,14 @@
 # Build artifacts
 dist/
 *.exe
+# …but the embedded frontend build output IS committed (fresh clones must
+# build and test without npm).
+!internal/webui/dist/
+
+# Frontend dependencies and intermediate build output.
+# internal/webui/dist is the embedded production build and IS committed.
+node_modules/
+frontend/dist/
 
 # Runtime databases
 *.db
