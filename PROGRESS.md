@@ -1,16 +1,16 @@
 # PROGRESS — 项目进度与交接记录
 
 > 本文档记录 Light-Kanban 的当前进度、约定、待办与 Mac 迁移指引，供后续维护者快速接上手。
-> 最后更新：2026-08-17（v1.0.4 已实现并推送到 origin/main，等待用户发布指令）
+> 最后更新：2026-08-17（v1.0.4 已发布）
 
 ## 1. 当前状态
 
 - **远端仓库**：https://github.com/LightDevCoder/light-kanban（public，gh 账号 LightDevCoder）
-- **最新发布**：`v1.0.3`（hardening release），4 个平台二进制齐全（tag `v1.0.3` 指向发布时 commit；不移动、不覆盖）
-- **当前工作**：**v1.0.4 implementation complete — pushed to origin/main — not released**。v1.0.4 目标：归档历史一键打开项目目录 + 交互式产品导览（替换旧 Wizard）；代码、测试与文档已完成，用户本地验收中发现并修复了导览灰屏 bug（缺失目标计时器回环 + 收紧为仅高亮目标可点）。等用户明确说「可以发布」后，再跑 `make cross` 出四平台二进制、建 `v1.0.4` tag 与 GitHub Release
+- **最新发布**：`v1.0.4`（onboarding & archive release），tag `v1.0.4` + GitHub Release 齐全，四平台二进制已上传（Windows amd64 / Linux amd64 / macOS amd64 / macOS arm64）；`v1.0.3` 及更早的 tag / Release / 二进制保持原样
+- **当前工作**：无进行中的 release；v1.0.4 为最新稳定版本，后续改动等待真实使用反馈
 - **工作树**：与 origin/main 一致
 
-## 2. v1.0.4 进行中（实现完成，已推送，未发布）
+## 2. v1.0.4（已发布）
 
 - **归档历史打开项目目录**：每条归档记录右侧新增文件夹图标（复用 Task Drawer 同款 `FolderIcon` + `openFolder` API，错误提示与抽屉一致，无新后端 API）；点击不改变归档状态、不关闭弹窗；Delete / 全选删除不变
 - **交互式产品导览**（替换旧居中 Wizard Modal，`GuideDialog` 已删除）：
@@ -18,10 +18,11 @@
   - 14 步流程：+ 创建 → workspace 路径（可手输/「选择…」）→ 标题 → 创建 → 精确定位刚创建的任务卡（task.id 取自 create mutation 返回结果，精确 `data-tour-task-id` 选择器；无 mutation id 时兜底跟踪新出现的 `data-tour-task-id`，绝不误指其他卡片）→ 抽屉 → 抽屉内文件夹 → 状态区（Agent 流转说明）→ 自动关抽屉后指向等你确认列头 → 设置 → 归档历史入口 → 归档弹窗 → 归档文件夹图标（无归档数据时 optional 自动跳过）→ Finish
   - 定位只依赖稳定 `data-tour="…"` 属性；`getBoundingClientRect` + 自动四向放置 + viewport 钳制；resize/scroll 监听重算；目标滚出视野自动 `scrollIntoView`；目标缺失 3.5–4s 超时（一次性计时器带 fired 防重入守卫——修掉「恢复卡片被 MutationObserver 回环反复撤销」的灰屏 bug，optional 自动跳过 / create-submit 消失自动回到第一步 / 抽屉被关回到任务卡 / 归档弹窗被关回到归档入口 / 其余核心步骤安全提示可 Next / Exit），永不无限等待
   - **持久化语义（v1.0.4 关键变更）**：只有完整走到 Finish 才写 `lk-tour-v1-completed=1`（旧 `lk-wizard-seen` 弃用）；Skip / Esc / 刷新 / 关浏览器都不写，下次启动重新自动出现；Settings → Guide 手动重放不清除 completed
-  - 全部文案进 i18n（zh/en 同构）；UI 保持 quiet / dense / grayscale-first（黑色低透明遮罩 + 白色高亮边 + 白面 tooltip + 现有 shadow），无高饱和 onboarding 视觉
-- **前端单测（新接缝）**：Tour 状态逻辑抽为纯函数 `frontend/src/components/ProductTour/logic.ts`（`isTourCompleted` / `resolveStep` / `getNextStep` / `shouldSkipStep` / `targetSelector` / `computePlacement` / `placeTooltip` 等），vitest 37 用例覆盖持久化、步进、缺失跳过、定位选择器约束（禁 nth-child/class/文本）、tooltip 四向放置与 viewport 钳制、步骤 i18n key 双字典完整性；`npm test` 已接入 `make check` 与 CI
-- **版本号**：frontend/package.json + package-lock.json = `1.0.4`；`internal/webui/dist` 随源码同 commit 重新生成
+  - 全部文案进 i18n（zh/en 同构，steps key 编译期校验）；UI 保持 quiet / dense / grayscale-first（黑色低透明遮罩 + 白色高亮边 + 白面 tooltip + 现有 shadow），无高饱和 onboarding 视觉
+- **前端单测（新接缝）**：Tour 状态逻辑抽为纯函数 `frontend/src/components/ProductTour/logic.ts`（`isTourCompleted` / `resolveStep` / `getNextStep` / `shouldSkipStep` / `targetSelector` / `createMissingWatcher` / `computePlacement` / `placeTooltip` 等），vitest 44 用例覆盖持久化、步进、缺失跳过与防重入、定位选择器约束（禁 nth-child/class/文本）、tooltip 四向放置与 viewport 钳制、步骤 i18n key 双字典完整性；`npm test` 已接入 `make check` 与 CI
+- **版本号**：frontend/package.json + package-lock.json = `1.0.4`；`internal/webui/dist` 随源码同 commit 提交
 - **文档**：README / README_CN（导览 + 归档描述）、spec.md（v1.0.4 决策）、manual-test-checklist.md（P/Q/R 三节）+ xlsx 已重新生成
+- **验收期间发现并修复**：导览灰屏 bug（缺失目标计时器回环）+ 按用户要求收紧为「仅高亮目标可点」，已用无头 Chrome 实测两条路径（取消被拦截不灰屏；抽屉关闭 4 秒后回到任务卡步骤）
 
 ## 2b. v1.0.2 已实现（已发布）
 
