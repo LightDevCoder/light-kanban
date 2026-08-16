@@ -117,7 +117,7 @@ const en: Dict = {
   'alert.opFailed': 'Operation failed: {e}',
   'alert.historyLoadFailed': 'Failed to load history: {e}',
   'alert.deleteFailed': 'Failed to delete: {e}',
-  'alert.pickFailed': 'System picker failed: {e}',
+  'alert.pickFailed': 'System picker failed: {e}\n\nYou can always type or paste an absolute path directly into the field instead (e.g. /Users/you/Projects/xxx) — no system dialog needed.',
 
   wizard: {
     steps: [

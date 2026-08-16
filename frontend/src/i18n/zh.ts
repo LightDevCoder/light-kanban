@@ -116,7 +116,7 @@ const zh = {
   'alert.opFailed': '操作失败：{e}',
   'alert.historyLoadFailed': '加载历史失败：{e}',
   'alert.deleteFailed': '删除失败：{e}',
-  'alert.pickFailed': '系统选择失败：{e}',
+  'alert.pickFailed': '系统选择失败：{e}\n\n可以直接在输入框里输入或粘贴绝对路径（例如 /Users/你的名字/Projects/xxx），不依赖系统窗口。',
 
   wizard: {
     steps: [
