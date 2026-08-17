@@ -2,17 +2,19 @@
 // verify-vendored-skill.cjs — integrity guard for the vendored
 // light-kanban-worker Skill snapshot (skills/light-kanban-worker/).
 //
-// Reads skills/manifest.json and verifies every listed file is present and
-// byte-identical (SHA-256) to the pinned upstream snapshot. Wired into
-// `make check` so the vendored copy can never drift from the upstream tag
-// without the gate failing.
+// Reads skills/manifest.json and verifies that the actual recursive file
+// set of the package directory equals the manifest file set exactly: every
+// listed file present and byte-identical (SHA-256), and no unlisted file on
+// disk. Wired into `make check` so the vendored copy can never drift from
+// the upstream tag without the gate failing.
 //
 // Usage:
 //   node scripts/verify-vendored-skill.cjs           # verify the snapshot
 //   node scripts/verify-vendored-skill.cjs --self-test
-//     # positive + negative assertions: a temp copy passes; a tampered
-//     # temp copy fails (non-zero assertion count, exit 0 only when the
-//     # guard itself behaves correctly)
+//     # positive + negative assertions: a pristine temp copy passes; a
+//     # tampered, deleted, or extra-file temp copy fails (non-zero
+//     # assertion count, exit 0 only when the guard itself behaves
+//     # correctly)
 
 "use strict";
 
@@ -31,6 +33,9 @@ function sha256(file) {
 
 // verifyManifest(rootDir, manifestPath) -> { files, failures }
 // rootDir is the directory that contains manifest.json and the package dir.
+// Verifies that the actual recursive file set of the package directory equals
+// the manifest file set exactly: every manifest file present and
+// byte-identical, and no file present that the manifest does not list.
 function verifyManifest(rootDir, manifestPath) {
   let manifest;
   try {
@@ -46,15 +51,46 @@ function verifyManifest(rootDir, manifestPath) {
     return { files: 0, failures };
   }
   const pkgDir = path.join(rootDir, "skills", pkg);
+
+  // Manifest file set (relative POSIX paths -> pinned SHA-256).
+  const manifestSet = new Map();
   for (const entry of manifest.files) {
-    const file = path.join(pkgDir, entry.path);
+    if (manifestSet.has(entry.path)) failures.push(`duplicate manifest entry: ${entry.path}`);
+    manifestSet.set(entry.path, entry.sha256);
+  }
+
+  // Actual recursive file set of the package directory.
+  const actualSet = new Set();
+  if (fs.existsSync(pkgDir)) {
+    const walk = (dir) => {
+      for (const name of fs.readdirSync(dir)) {
+        const full = path.join(dir, name);
+        const stat = fs.statSync(full);
+        if (stat.isDirectory()) walk(full);
+        else if (stat.isFile()) actualSet.add(path.relative(pkgDir, full).split(path.sep).join("/"));
+      }
+    };
+    walk(pkgDir);
+  } else {
+    failures.push(`package directory missing: ${pkg}`);
+  }
+
+  // Missing files and hash drift for every manifest-listed file.
+  for (const [rel, sha] of manifestSet) {
+    const file = path.join(pkgDir, rel);
     if (!fs.existsSync(file)) {
-      failures.push(`missing file: ${entry.path}`);
+      failures.push(`missing file: ${rel}`);
       continue;
     }
     const actual = sha256(file);
-    if (actual !== entry.sha256) failures.push(`hash mismatch: ${entry.path}`);
+    if (actual !== sha) failures.push(`hash mismatch: ${rel}`);
   }
+
+  // Unexpected files present on disk but absent from the manifest.
+  for (const rel of [...actualSet].sort()) {
+    if (!manifestSet.has(rel)) failures.push(`unexpected file: ${rel}`);
+  }
+
   return { files: manifest.files.length, failures };
 }
 
@@ -67,23 +103,46 @@ function main() {
       if (!cond) failures.push(label);
     };
 
-    // Positive fixture: a pristine temp copy of the vendored snapshot passes.
+    // Positive fixture: a pristine temp copy of the vendored snapshot passes,
+    // and the guard verifies exactly the manifest's file set — the actual
+    // recursive package file set must equal the manifest file set.
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "lk-vendor-"));
     fs.cpSync(path.join(REPO_ROOT, "skills"), path.join(tmp, "skills"), { recursive: true });
+    const manifest = JSON.parse(fs.readFileSync(path.join(tmp, "skills", "manifest.json"), "utf8"));
+    const walkFiles = (dir) => {
+      const out = [];
+      for (const name of fs.readdirSync(dir)) {
+        const full = path.join(dir, name);
+        const stat = fs.statSync(full);
+        if (stat.isDirectory()) out.push(...walkFiles(full));
+        else if (stat.isFile()) out.push(path.relative(dir, full));
+      }
+      return out;
+    };
+    const actualCount = walkFiles(path.join(tmp, "skills", "light-kanban-worker")).length;
+    assert(actualCount > 0, `pristine copy must contain package files (got ${actualCount})`);
     const ok = verifyManifest(tmp, path.join(tmp, "skills", "manifest.json"));
-    assert(ok.files === 10, `pristine copy must verify 10 files (got ${ok.files})`);
+    assert(ok.files === manifest.files.length, `pristine copy must verify every manifest file (${ok.files} vs ${manifest.files.length})`);
+    assert(ok.files === actualCount, `pristine copy file count must equal the actual package file set (${ok.files} vs ${actualCount})`);
     assert(ok.failures.length === 0, `pristine copy must pass (got: ${ok.failures.join("; ")})`);
 
-    // Negative fixture: a tampered copy fails with a hash mismatch.
+    // Negative fixture 1: a tampered copy fails with a hash mismatch.
     const tampered = path.join(tmp, "skills", "light-kanban-worker", "SKILL.md");
     fs.appendFileSync(tampered, "\n# tampered\n");
     const bad = verifyManifest(tmp, path.join(tmp, "skills", "manifest.json"));
     assert(bad.failures.some((f) => f.includes("hash mismatch: SKILL.md")), "tampered copy must fail with a SKILL.md hash mismatch");
 
-    // Negative fixture: a deleted file fails with a missing-file error.
+    // Negative fixture 2: a deleted file fails with a missing-file error.
     fs.rmSync(tampered);
     const missing = verifyManifest(tmp, path.join(tmp, "skills", "manifest.json"));
     assert(missing.failures.some((f) => f.includes("missing file: SKILL.md")), "deleted file must fail with a missing-file error");
+
+    // Negative fixture 3: an unexpected extra file fails even though every
+    // manifest-listed file is still intact (SKILL.md is deleted here, so the
+    // extra file must be reported alongside the missing-file failure).
+    fs.writeFileSync(path.join(tmp, "skills", "light-kanban-worker", "unexpected-extra.md"), "# not part of the vendored snapshot\n");
+    const extra = verifyManifest(tmp, path.join(tmp, "skills", "manifest.json"));
+    assert(extra.failures.some((f) => f.includes("unexpected file: unexpected-extra.md")), "unexpected extra file must fail with an unexpected-file error");
 
     fs.rmSync(tmp, { recursive: true, force: true });
     if (failures.length > 0) {

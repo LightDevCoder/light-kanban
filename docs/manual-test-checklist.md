@@ -217,9 +217,9 @@
 
 | # | 测什么 | 怎么测 | 预期结果 | 结果 | 评论（留给我） |
 |---|--------|--------|----------|------|--------------|
-| S1 | 安装 Worker Skill | `npx skills add LightDevCoder/skills#v0.1.4 --skill light-kanban-worker --yes --copy --agent '*'` | 安装成功；`npx --yes skills list` 列出 `light-kanban-worker`（不依赖源码 checkout） | |
-| S1b | 手动复制安装（离线 / 无 npx） | 把本仓库 `skills/light-kanban-worker/` 整个目录复制到 host 认可的 skills root（如 `~/.agents/skills/light-kanban-worker`），刷新 host | host 的 skill 列表能发现 `light-kanban-worker`；`node scripts/verify-vendored-skill.cjs` 输出 `VENDOR_SKILL=PASS (10 files …)` | |
-| S2 | 一次性手动运行 | 建一张 todo 卡后，用 prompt「Use light-kanban-worker to process one task from http://127.0.0.1:8641 as agent codex-main.」跑一次 | Agent 领取该卡 → 进入 workspace 执行 → `complete` → 卡片到**等你确认**，本次运行结束 | |
+| S1 | 安装 Worker Skill | `npx skills add LightDevCoder/skills#v0.1.5 --skill light-kanban-worker --yes --copy --agent '*'` | 安装成功；`npx --yes skills list` 列出 `light-kanban-worker`（不依赖源码 checkout） | |
+| S1b | 手动复制安装（离线 / 无 npx） | 把本仓库 `skills/light-kanban-worker/` 整个目录复制到 host 认可的 skills root（如 `~/.agents/skills/light-kanban-worker`），刷新 host | host 的 skill 列表能发现 `light-kanban-worker`；`node scripts/verify-vendored-skill.cjs` 输出 `VENDOR_SKILL=PASS (14 files …)` | |
+| S2 | 一次性手动运行（已注册身份） | 建一张 todo 卡后，用 prompt「Use light-kanban-worker to process one task from http://127.0.0.1:8641 as agent codex-main.」跑一次（前提：codex-main 已注册） | Agent 领取该卡 → 进入 workspace 执行 → `complete` → 卡片到**等你确认**，本次运行结束 | |
 | S3 | 定时 prompt | 用 README Quick Start 第四步的 scheduler prompt 创建每 15 分钟（或更短）的定时任务 | 每次唤醒只处理一张卡；没有卡时正常结束，不新建任务、不卡死 | |
 | S4 | 退回修改闭环 | 对**等你确认**卡点「退回修改」并附反馈 | 下一次唤醒同一 Agent 优先处理该卡，按反馈修改后重新 `complete` 到**等你确认**；不需要新建任务 | |
 | S5 | workspace 缺失 | 新建一张 workspace 路径不存在的卡 | Worker 领取后 block，卡上显示「Workspace path is not accessible from this agent host.」 | |
@@ -227,6 +227,18 @@
 | S7 | 空队列 | 清空所有活跃任务后运行一次 worker | 「No task available」干净退出；数据库无变化 | |
 | S8 | 服务离线 | 停掉 Light-Kanban 后运行一次 worker | 清晰报错结束；不修改任何任务 | |
 
+## T. v1.0.6 Worker 维护（首次注册 / 调度并发 / 快照完整性）
+
+> 前提：**全新 Light-Kanban 数据库**（删掉 `kanban.db` 与 `avatars/` 或换个目录）；一个**从未注册过**的 agentId + 一张真实头像图片；服务按默认模式启动（127.0.0.1:8641）。
+
+| # | 测什么 | 怎么测 | 预期结果 | 结果 | 评论（留给我） |
+|---|--------|--------|----------|------|--------------|
+| T1 | 首次注册（全新身份） | 全新数据库 + 全新 agentId，用 README Quick Start 第四步的完整 one-shot prompt（含 Agent ID / Name / Avatar 本地图片路径）手动跑一次 | Worker 上传头像 → 注册新身份 → 领取 todo → 执行 → `complete` 到**等你确认**；`GET /api/agents` 能看到该 agent 的 name/avatar。**不得用已注册过的身份假装验证 first-run** | |
+| T2 | 缺 avatar 不注册 | 换另一个全新 agentId，one-shot prompt 只给 ID + Name、**不给 Avatar** | Worker 报告身份配置缺失，不 claim、不改动任何任务，运行结束；数据库任务无变化 | |
+| T3 | 调度并发 = 1 | 用真实 scheduler 的 `max concurrency = 1`（对同一 agentId）配置定时任务；没有该能力时用明确可重复的 scheduler lock fixture 验证 | 同一 agentId 的上一个 run 仍活跃时，下一次调度**不得**启动第二个处理 run（这是 scheduler 契约，不是 Light-Kanban 服务器 lock） | |
+| T4 | 多 Agent 回归 | `codex-main` 与 `claude-code` 同时运行两个 worker 领取同一批 todo | 原子 claim：每张卡恰好一个赢家，两个 agent 拿到**不同**任务；不因 v1.0.6 的 non-overlap 文档调整被误伤 | |
+| T5 | vendored 快照完整性 | 运行 `node scripts/verify-vendored-skill.cjs` 与 `node scripts/verify-vendored-skill.cjs --self-test` | `VENDOR_SKILL=PASS (14 files …)` 且 `VENDOR_SELF_TEST=PASS (7 assertions)`；改动 / 删除 / 新增快照内文件都会 FAIL（自测覆盖三类负例） | |
+
 ---
 
-**判读**：A~L 全部 ✅ 即核心功能验收通过；M、N 为抽查项；O 为 v1.0.3 加固专项；P、Q、R 为 v1.0.4 归档快捷入口 + 交互式产品导览专项；S 为 v1.0.5 Worker Skill 集成专项。任一 ❌ 请把编号和现象发回来。
+**判读**：A~L 全部 ✅ 即核心功能验收通过；M、N 为抽查项；O 为 v1.0.3 加固专项；P、Q、R 为 v1.0.4 归档快捷入口 + 交互式产品导览专项；S 为 v1.0.5 Worker Skill 集成专项；T 为 v1.0.6 Worker 维护专项（首次注册 / 调度并发 / 快照完整性）。任一 ❌ 请把编号和现象发回来。

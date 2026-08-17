@@ -1,14 +1,24 @@
 # PROGRESS — 项目进度与交接记录
 
 > 本文档记录 Light-Kanban 的当前进度、约定、待办与 Mac 迁移指引，供后续维护者快速接上手。
-> 最后更新：2026-08-17（v1.0.5 已发布）
+> 最后更新：2026-08-17（v1.0.6 维护发布准备中）
 
 ## 1. 当前状态
 
 - **远端仓库**：https://github.com/LightDevCoder/light-kanban（public，gh 账号 LightDevCoder）
-- **最新发布**：`v1.0.5`（light-kanban-worker Skill 集成），tag `v1.0.5` + GitHub Release 齐全，四平台二进制（Windows amd64 / Linux amd64 / macOS amd64 / macOS arm64）+ `light-kanban-worker.zip`（Skill 快照）已作为 release 资产上传；`v1.0.4` 及更早的 tag / Release / 二进制保持原样
-- **当前工作**：无进行中的 release；v1.0.5 为最新稳定版本，后续改动等待真实使用反馈
-- **工作树**：与 origin/main 一致（发布标记提交后）
+- **最新发布**：`v1.0.5`（light-kanban-worker Skill 集成）；`v1.0.6`（Worker 维护发布）为当前 release candidate，待用户验收后发布；发布时上传四平台二进制（Windows amd64 / Linux amd64 / macOS amd64 / macOS arm64）+ `light-kanban-worker.zip`（Skills v0.1.5 快照）
+- **当前工作**：v1.0.6 维护发布——Skills v0.1.5 已实现并重新 vendor，`make check` / `make cross` PASS，等待用户验收（manual-test-checklist T 节）后发布
+- **工作树**：v1.0.6 candidate
+
+## 2d. v1.0.6（release candidate，待用户验收发布）— Worker 维护
+
+- **范围**：纯维护发布——无 REST API 变更、无 UI 变更、无任务状态机变更、不重新截图；Skills v0.1.5 先发布并 fresh-install 验证，再重新 vendor 并发布 Light-Kanban v1.0.6
+- **Skills v0.1.5（上游行为权威）**：`light-kanban-worker` 明确禁止同一 agentId 的 scheduled run 重叠（同一 agentId 任意时刻至多一个 invocation 活跃，上一 run 未结束时唤醒必须 skip；不同 agentId 仍可并发）；准确记录 atomic claim 边界（只保护不同 worker 争同一张 To Do，不是同一 agent identity 的并发锁）；并发控制归 scheduler / agent runtime（`max concurrent runs = 1` 或等价设置），worker 不新增 lock/heartbeat/lease service；首次注册明确要求 ID + name + avatar（本地图片经 `POST /api/avatars` 上传），已有身份复用服务器 name/avatar，缺 avatar 的新身份不 claim 不改动；新增 contract/behavior 测试、两个对抗性 negative fixture 与场景 G（同 agent 并发唤醒）/H（无 avatar 新身份，诚实记录验证边界），A–F 不变；`review-loop agent-skill` 第二次 PASS（4 findings 修复：F-001 pre-tag 发布表述 / F-002 api.md 版本表述 / F-003 收据 gate 行 / G-001 残留 published 句子）；release evidence 区分 pre-release gate / post-release verification
+- **Quick Start 修复**：README / README_CN 第四步 scheduler prompt 增加 `Agent Avatar: /path/to/codex-icon.png` 并说明「Avatar 只在首次注册需要」；紧接着写死「同一 Agent ID 的调度并发 = 1」；one-shot 示例改为首次注册可用形式（ID + Name + Avatar），注册后可简化为旧的单行 prompt；Use Cases 增「不同 Agent ID 可并发、同 ID 不得重叠」与长任务跳过示例（15 分钟调度 / 40 分钟任务：08:00 run，08:15/08:30 skip，08:40 结束，08:45 允许下一次）；手动 API 接入补 atomic claim 边界说明
+- **vendored 快照完整性强化**：`scripts/verify-vendored-skill.cjs` 从「只校验 manifest 列出的文件」升级为「实际递归文件集 === manifest 文件集」——缺文件、hash 漂移、**多出来的未登记文件**全部 FAIL；`--self-test` 扩到 7 断言（positive + 改 SKILL.md → hash mismatch + 删 SKILL.md → missing + 新增 unexpected-extra.md → unexpected file），接入 `make check`/CI
+- **重新 vendor**：从 `LightDevCoder/skills#v0.1.5`（commit 见 manifest）逐字节复制 `skills/light-kanban-worker/`（14 文件），`skills/manifest.json` 记录 repository / tag / commit SHA / 包路径 / 每文件 SHA-256
+- **文档**：spec.md v1.0.6 章节、AGENTS.md（vendored 契约 + vendor guard 描述）、manual-test-checklist.md T 节（首次注册 / 缺 avatar / 调度并发 / 多 Agent 回归 / 快照完整性）+ xlsx 重新生成
+- **验收**：`make check` / `make cross` PASS；全新数据库 + 全新 agentId + 真实头像的 first-registration smoke PASS；scheduler non-overlap smoke（max concurrency 1 / lock fixture）PASS；多 Agent 回归（codex-main + claude-code 并发 claim 不同任务）PASS；用户验收后发布 tag `v1.0.6` + GitHub Release
 
 ## 2a. v1.0.5（已发布）
 

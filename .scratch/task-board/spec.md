@@ -185,10 +185,13 @@ Use light-kanban-worker to process at most one Light-Kanban task.
 
 This repository ships the Skill as a byte-identical snapshot in
 `skills/light-kanban-worker/` (pinned to `LightDevCoder/skills` tag
-`v0.1.4`, commit `a9cc8aa`) for offline / manual host installation. The
+`v0.1.5`, commit recorded in `skills/manifest.json`) for offline / manual
+host installation. The
 upstream repository remains the behavioral authority; the snapshot is
 read-only, integrity-pinned by `skills/manifest.json` (SHA-256), and checked
-by `make check` and CI (`scripts/verify-vendored-skill.cjs`).
+by `make check` and CI (`scripts/verify-vendored-skill.cjs` — the actual
+recursive file set must equal the manifest file set exactly: missing files,
+hash drift, and unexpected extra files all fail).
 
 ### Validation for this release
 
@@ -196,5 +199,54 @@ by `make check` and CI (`scripts/verify-vendored-skill.cjs`).
   change — this release is documentation + integration packaging.
 - Cross-repo: the Worker Skill passed its full admission
   (`review-loop agent-skill` PASS), behavioral scenarios A–F against a real
-  Light-Kanban server, and fresh-install verification from Skills v0.1.4.
+  Light-Kanban server, and fresh-install verification from Skills v0.1.5.
+
+## v1.0.6 Worker Maintenance
+
+Status: release candidate — prepared for v1.0.6, published after user
+acceptance. Maintenance release — **no REST API change, no UI
+change, no state-machine change**.
+
+### Same-agent runs must not overlap
+
+- Skills v0.1.5 (the vendored behavioral authority) now explicitly forbids
+  two overlapping runs with the same agentId: at most one invocation per
+  agent id may be active, and a wake that fires while the previous run is
+  still active must skip.
+- Boundary, stated precisely: Light-Kanban's atomic claim protects two
+  **different** workers claiming the same To Do card. It does not protect
+  two runs sharing one agentId, because owned work needs no new claim.
+  Atomic claim is not a concurrency lock for multiple invocations using the
+  same agent identity.
+- Concurrency control stays with the scheduler / agent runtime
+  (`max concurrent runs = 1` or an equivalent skip-while-active setting).
+  This release adds no worker lease, heartbeat, scheduler, or lock endpoint
+  on the server; the scheduler owns the boundary.
+
+### First-registration identity
+
+- First registration of an agentId requires ID + name + avatar; a local
+  image is uploaded via `POST /api/avatars` and the returned
+  `/api/avatars/...` path is used for the claim. Later runs reuse the stored
+  identity (avatar is required for first registration, not every wake).
+- A new agentId without name/avatar reports identity configuration missing:
+  no claim, no task mutation, run ends. Quick Start now carries the
+  first-run one-shot prompt with Agent Avatar.
+
+### Vendor integrity gate (exact file set)
+
+- `scripts/verify-vendored-skill.cjs` verifies the actual recursive file set
+  of `skills/light-kanban-worker/` against `skills/manifest.json` exactly:
+  modified file → hash mismatch FAIL; deleted file → missing file FAIL;
+  added unlisted file → unexpected file FAIL. `--self-test` covers the
+  positive copy and all three negative classes (7 assertions).
+
+### Validation for this release
+
+- `make check` (frontend build, vitest, dist guard, gofmt, vet, go test,
+  vendor guard + self-test) and `make cross` (four platforms) PASS.
+- Fresh-database first-registration smoke with a real avatar PASS; scheduler
+  non-overlap smoke (max concurrency 1 / lock fixture — not a server lease
+  test) PASS; multi-agent regression (two agents, atomic claim, one winner
+  per card) PASS.
 

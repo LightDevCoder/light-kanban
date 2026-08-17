@@ -86,7 +86,7 @@ chmod +x light-kanban-linux-amd64
 给你的 agent host 安装官方 worker Skill（推荐）：
 
 ```bash
-npx skills add LightDevCoder/skills#v0.1.4 \
+npx skills add LightDevCoder/skills#v0.1.5 \
   --skill light-kanban-worker \
   --yes \
   --copy \
@@ -126,13 +126,39 @@ codex-main
 Agent Name:
 Codex
 
+Agent Avatar:
+/path/to/codex-icon.png
+
 Prefer existing or returned work before claiming a new task.
 When finished, return the task for human confirmation.
 ```
 
+Avatar 只在**这个 Agent ID 第一次注册**时需要；之后的运行复用 Light-Kanban
+保存的身份。
+
+把这个 schedule 配置为 codex-main 的 max concurrency = 1：上一个
+codex-main run 还在运行时，不要再启动新的 run。不同 Agent ID 可以并发运行，
+但同一个 Agent ID 的两个 run 不得重叠。
+
 每 15 分钟调度一次——或按你的工作负载选择节奏。
 
-想先手动测一次再建定时任务？用一次性 prompt：
+想先手动测一次再建定时任务？用能完成首次注册的完整一次性 prompt：
+
+```text
+Use light-kanban-worker to process one Light-Kanban task.
+
+Light-Kanban URL:
+http://127.0.0.1:8641
+
+Agent ID:
+codex-main
+Agent Name:
+Codex
+Agent Avatar:
+/path/to/codex-icon.png
+```
+
+首次注册成功后，可以简化为：
 
 ```text
 Use light-kanban-worker to process one task from
@@ -159,7 +185,23 @@ Codex、Claude Code、DeepSeek——各自通过自己的 scheduler 运行 Worke
                  └─ DeepSeek
 ```
 
-领取是原子的：同一张卡不会被两个 Agent 同时领取，多个 Agent 可以安全共用一块看板。
+领取是原子的：同一张卡不会被两个 Agent 同时领取，多个 Agent 可以安全共用一块看板。不同 Agent ID 可以并发运行；同一个 Agent ID 的多个 run 不得重叠——给每个 scheduler 配置其 Agent ID 的 max concurrency = 1。
+
+### 长任务与调度间隔
+
+如果任务耗时超过调度间隔，同一 Agent 的下一次唤醒必须跳过，直到当前 run
+结束。示例：每 15 分钟调度一次，任务耗时 40 分钟。
+
+```text
+08:00 run
+08:15 skip
+08:30 skip
+08:40 结束
+08:45 允许下一次 run
+```
+
+Worker 契约要求 scheduler 强制执行这一点（每个 Agent ID 的 max
+concurrency = 1）；看板本身不向 agent 出租 run。
 
 ### 人工验收闭环
 
@@ -206,6 +248,10 @@ curl -X POST -H "Content-Type: application/json" \
 ```
 
 接取约束：`name` 用你的工具名，`avatar` 必须是 **agent 自己的图标图片**（例如 Codex 用 Codex 图标、Claude Code 用 Claude Code 图标——上传后的路径或 http(s) 图片 URL），占位图或伪造路径会被 422 拒绝。接取后卡片右上角显示该 agent 的头像。
+
+原子领取防止**不同** agent 同时领取同一张待处理卡。它不协调**同一个
+agentId** 的重叠执行——那是 scheduler 的职责（每个 agentId 的 max
+concurrency = 1）。
 
 状态流转（agent 通过 API）：`POST /api/tasks/<id>/block`（可带 `{"reason":"…"}`，卡片会直接显示卡住原因）、`/unblock`（解除阻碍）、`/complete`（干完交回）。任务到**等你确认**后由人类验收：**验收通过**即归档；**退回修改**则带着反馈退回处理中（agent 调 `POST /api/tasks/<id>/reject` 带 `{"feedback":"…"}` 亦可，反馈可从 `GET /api/tasks` 读到）。
 

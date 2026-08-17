@@ -3,8 +3,8 @@
     "package": "light-kanban-worker",
     "source": {
       "repository": "https://github.com/LightDevCoder/skills",
-      "tag": "v0.1.4",
-      "commit": "a9cc8aa029c926fc80f6ddc0022793f79dfd85bd",
+      "tag": "v0.1.5",
+      "commit": "a56aa9d98de0b941ee2282144bc7e756ef5e48bd",
       "path": "skills/light-kanban-worker"
     },
     "purpose": "Vendored snapshot for offline / manual host installation. The upstream skills repository is the behavioral authority; never edit these files in place — re-vendor from a future upstream release and regenerate this manifest."
@@ -12,19 +12,23 @@
   "files": [
     {
       "path": "SKILL.md",
-      "sha256": "029cf833f3ba33809c27055a6db893ea10a54d176c722ca1594db1fefb4c40df"
+      "sha256": "3ca71ee7e07817b841532d659ffb29ff539fb4acb06b52f7a92034da0f5e93f4"
     },
     {
       "path": "agents/openai.yaml",
-      "sha256": "9dd6789e2c2d4bdc6b7ba5811ab08ac49a45ae2f9d69f25e55dc74eef93906a8"
+      "sha256": "8ddaf2e07c178edece0acb5fb04d4d58b311b1a916d1b932ebca8bf8eb578046"
     },
     {
       "path": "references/api.md",
-      "sha256": "54a199de05051813f7768f6f9fe6cd1376315ec45fd7133d2b89fcdb39723c00"
+      "sha256": "cb457853b6601466d63993faa922efe90118bdc6f198105c62ed98d6df41fc5f"
     },
     {
       "path": "tests/fixtures/archive-variant.md",
       "sha256": "3c76187f1d92523d732b1bd9c596fc58dc25e3321f2bbe18bf2fa47255999520"
+    },
+    {
+      "path": "tests/fixtures/avatar-optional-first-registration.md",
+      "sha256": "dc14629d2e928436749ee3c1140a6e3352fc390c8ee8fd2f778e66296566f496"
     },
     {
       "path": "tests/fixtures/daemon-variant.md",
@@ -35,20 +39,32 @@
       "sha256": "ad489ec00832c9fbfb8a6e98fa8c40f7d3208228cc68f2ebe9de8328c41a550e"
     },
     {
+      "path": "tests/fixtures/overlap-allowed-variant.md",
+      "sha256": "ffa0f06488705bb52792d00ab061ded44b71ead0a36c10e82463178da32f06a5"
+    },
+    {
+      "path": "tests/fixtures/scenario-g-scheduler-guard.md",
+      "sha256": "f6e0ed6b4e5dcd40e07aaa52b94ea73ba36a5a156599bfba2bb4f5e6a458bba6"
+    },
+    {
+      "path": "tests/fixtures/scenario-h-fresh-identity-no-avatar.md",
+      "sha256": "a2e60cbfa5aee8dfbd6f1c1cd8654589ecbbcae6dc120374bd354967fcfd0395"
+    },
+    {
       "path": "tests/fixtures/todo-first-variant.md",
       "sha256": "535fcd4bfa39c52b33d69bbcd5cc74f3d876f6746c96dd9435a7a8c91e30b273"
     },
     {
       "path": "tests/test_light_kanban_worker_behavior.py",
-      "sha256": "dca278ea1c4807e7efc92d257b8b1cea045ff2af35215172b621df445b97723f"
+      "sha256": "2b7db3f9d5b2e48f396fbfc4b073462d36cc23a63fe4f68f07db79f0ec7f9dfa"
     },
     {
       "path": "tests/test_light_kanban_worker_contract.py",
-      "sha256": "d87a71e4ae0d6869917f88b7bc4062bb76ee3144296dcee50fad63b85d6541a2"
+      "sha256": "a53d196688446b114e7de16aad79e70416c6da784fa364fc265e9a822e48c2be"
     },
     {
       "path": "tests/worker_checks.py",
-      "sha256": "7f51547c517f22e75036b39dbf404fd8176497f6a883974a3755ce9b2e431a3a"
+      "sha256": "660dba69b09070bb61233b7848241553b065a0aba2c1d736b522be0d295a7c71"
     }
   ]
 }

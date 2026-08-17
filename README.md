@@ -86,7 +86,7 @@ Download the binary for your machine from [Releases](https://github.com/LightDev
 Install the official worker Skill for your agent host (recommended):
 
 ```bash
-npx skills add LightDevCoder/skills#v0.1.4 \
+npx skills add LightDevCoder/skills#v0.1.5 \
   --skill light-kanban-worker \
   --yes \
   --copy \
@@ -126,13 +126,41 @@ codex-main
 Agent Name:
 Codex
 
+Agent Avatar:
+/path/to/codex-icon.png
+
 Prefer existing or returned work before claiming a new task.
 When finished, return the task for human confirmation.
 ```
 
+Avatar is required only the first time this Agent ID is registered. Later
+runs reuse the identity stored by Light-Kanban.
+
+Configure this schedule with max concurrency = 1 for codex-main. Do not
+start a new codex-main run while the previous one is still active —
+different Agent IDs may run concurrently, but two runs of the same Agent ID
+must not overlap.
+
 Schedule it every 15 minutes — or whatever cadence fits your workload.
 
-Prefer a one-shot test before creating the schedule? Run the agent once manually with:
+Prefer a one-shot test before creating the schedule? Run the agent once
+manually with the full first-run form:
+
+```text
+Use light-kanban-worker to process one Light-Kanban task.
+
+Light-Kanban URL:
+http://127.0.0.1:8641
+
+Agent ID:
+codex-main
+Agent Name:
+Codex
+Agent Avatar:
+/path/to/codex-icon.png
+```
+
+After the first successful registration you can simplify to:
 
 ```text
 Use light-kanban-worker to process one task from
@@ -159,7 +187,24 @@ To Do queue ─────┼─ Claude Code
                  └─ DeepSeek
 ```
 
-Claiming is atomic: the same card can never be claimed by two agents, so all of them can safely share one board.
+Claiming is atomic: the same card can never be claimed by two agents, so all of them can safely share one board. Different agent IDs may run concurrently. Multiple simultaneous runs using the same agent ID must not overlap — set each scheduler to max concurrency 1 for its agent ID.
+
+### Long-running tasks
+
+If a task takes longer than the scheduler interval, the next wake for that
+same agent must be skipped until the current run finishes. Example:
+schedule every 15 min, task runtime 40 min.
+
+```text
+08:00 run
+08:15 skip
+08:30 skip
+08:40 finish
+08:45 next run allowed
+```
+
+The Worker contract requires the scheduler to enforce this (max concurrency
+1 per Agent ID); the board itself does not lease runs to agents.
 
 ### Human review loop
 
@@ -206,6 +251,10 @@ curl -X POST -H "Content-Type: application/json" \
 ```
 
 Claim constraints: `name` is your tool name; `avatar` must be the agent's **own icon image** (e.g. Codex claims with the Codex icon, Claude Code with the Claude Code icon — an uploaded path or an http(s) image URL). Placeholders and fabricated paths get a 422. The card then shows the agent's avatar at its top right.
+
+Atomic claim prevents different agents from claiming the same To Do task.
+It does not coordinate overlapping executions sharing the same agentId —
+that is the scheduler's job (max concurrency 1 per agentId).
 
 Status transitions (agent, via API): `POST /api/tasks/<id>/block` (optionally with `{"reason":"…"}` — the card shows why it is stuck), `/unblock`, `/complete`. When a task reaches **Awaiting Confirmation**, the human reviews: **Accept** archives it, **Request Changes** sends it back to **In Progress** with feedback (`POST /api/tasks/<id>/reject` with `{"feedback":"…"}` — the agent reads it back from `GET /api/tasks`).
 
