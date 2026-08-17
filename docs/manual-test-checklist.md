@@ -237,7 +237,7 @@
 | T2 | 缺 avatar 不注册 | 换另一个全新 agentId，one-shot prompt 只给 ID + Name、**不给 Avatar** | Worker 报告身份配置缺失，不 claim、不改动任何任务，运行结束；数据库任务无变化 | |
 | T3 | 调度并发 = 1 | 用真实 scheduler 的 `max concurrency = 1`（对同一 agentId）配置定时任务；没有该能力时用明确可重复的 scheduler lock fixture 验证 | 同一 agentId 的上一个 run 仍活跃时，下一次调度**不得**启动第二个处理 run（这是 scheduler 契约，不是 Light-Kanban 服务器 lock） | |
 | T4 | 多 Agent 回归 | `codex-main` 与 `claude-code` 同时运行两个 worker 领取同一批 todo | 原子 claim：每张卡恰好一个赢家，两个 agent 拿到**不同**任务；不因 v1.0.6 的 non-overlap 文档调整被误伤 | |
-| T5 | vendored 快照完整性 | 运行 `node scripts/verify-vendored-skill.cjs` 与 `node scripts/verify-vendored-skill.cjs --self-test` | `VENDOR_SKILL=PASS (14 files …)` 且 `VENDOR_SELF_TEST=PASS (7 assertions)`；改动 / 删除 / 新增快照内文件都会 FAIL（自测覆盖三类负例） | |
+| T5 | vendored 快照完整性 | 运行 `node scripts/verify-vendored-skill.cjs` 与 `node scripts/verify-vendored-skill.cjs --self-test` | `VENDOR_SKILL=PASS (14 files …)` 且 `VENDOR_SELF_TEST=PASS (8 assertions)`；改动 / 删除 / 新增快照内文件都会 FAIL（自测覆盖三类负例） | |
 
 ---
 

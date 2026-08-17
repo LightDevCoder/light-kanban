@@ -35,5 +35,5 @@ cp -R skills/light-kanban-worker ~/.agents/skills/light-kanban-worker
 ## 完整性
 
 - `skills/manifest.json` 记录上游来源（repo / tag / commit）与全部 14 个文件的 SHA-256。
-- `make check` 会运行 `scripts/verify-vendored-skill.cjs`：实际递归文件集必须与 manifest 文件集**完全一致**——本地改动（hash 漂移）、缺文件、多出未登记文件都会让门禁失败（自测模式 7 断言覆盖 positive 与三类负例，会故意篡改副本验证守卫真的会报错）。
+- `make check` 会运行 `scripts/verify-vendored-skill.cjs`：实际递归文件集必须与 manifest 文件集**完全一致**——本地改动（hash 漂移）、缺文件、多出未登记文件都会让门禁失败（自测模式 8 断言覆盖 positive 与三类负例（extra-file 负例单独隔离验证），会故意篡改副本验证守卫真的会报错）。
 - 升级流程：上游 skills 发布新版本后，从新 tag 重新抽取本目录、重新生成 manifest、同步本 README 中的 tag/commit，**不要**直接编辑快照里的文件。

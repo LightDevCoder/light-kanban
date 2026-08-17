@@ -31,7 +31,21 @@ function sha256(file) {
   return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
 }
 
-// verifyManifest(rootDir, manifestPath) -> { files, failures }
+// walkFiles(dir, baseDir) -> sorted relative POSIX paths of every file under
+// dir. Paths are normalized with "/" separators so the exact file set is
+// platform-independent (the manifest always uses POSIX relative paths).
+function walkFiles(dir, baseDir) {
+  const out = [];
+  for (const name of fs.readdirSync(dir)) {
+    const full = path.join(dir, name);
+    const stat = fs.statSync(full);
+    if (stat.isDirectory()) out.push(...walkFiles(full, baseDir));
+    else if (stat.isFile()) out.push(path.relative(baseDir, full).split(path.sep).join("/"));
+  }
+  return out.sort();
+}
+
+// verifyManifest(rootDir, manifestPath) -> { manifestEntryCount, failures }
 // rootDir is the directory that contains manifest.json and the package dir.
 // Verifies that the actual recursive file set of the package directory equals
 // the manifest file set exactly: every manifest file present and
@@ -41,14 +55,14 @@ function verifyManifest(rootDir, manifestPath) {
   try {
     manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
   } catch (err) {
-    return { files: 0, failures: [`manifest unreadable: ${err.message}`] };
+    return { manifestEntryCount: 0, failures: [`manifest unreadable: ${err.message}`] };
   }
   const failures = [];
   const pkg = manifest.vendor && manifest.vendor.package;
   if (!pkg) failures.push("manifest is missing vendor.package");
   if (!manifest.files || !Array.isArray(manifest.files) || manifest.files.length === 0) {
     failures.push("manifest has no file list");
-    return { files: 0, failures };
+    return { manifestEntryCount: 0, failures };
   }
   const pkgDir = path.join(rootDir, "skills", pkg);
 
@@ -62,15 +76,7 @@ function verifyManifest(rootDir, manifestPath) {
   // Actual recursive file set of the package directory.
   const actualSet = new Set();
   if (fs.existsSync(pkgDir)) {
-    const walk = (dir) => {
-      for (const name of fs.readdirSync(dir)) {
-        const full = path.join(dir, name);
-        const stat = fs.statSync(full);
-        if (stat.isDirectory()) walk(full);
-        else if (stat.isFile()) actualSet.add(path.relative(pkgDir, full).split(path.sep).join("/"));
-      }
-    };
-    walk(pkgDir);
+    for (const rel of walkFiles(pkgDir, pkgDir)) actualSet.add(rel);
   } else {
     failures.push(`package directory missing: ${pkg}`);
   }
@@ -91,7 +97,7 @@ function verifyManifest(rootDir, manifestPath) {
     if (!manifestSet.has(rel)) failures.push(`unexpected file: ${rel}`);
   }
 
-  return { files: manifest.files.length, failures };
+  return { manifestEntryCount: manifest.files.length, failures };
 }
 
 function main() {
@@ -109,25 +115,16 @@ function main() {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "lk-vendor-"));
     fs.cpSync(path.join(REPO_ROOT, "skills"), path.join(tmp, "skills"), { recursive: true });
     const manifest = JSON.parse(fs.readFileSync(path.join(tmp, "skills", "manifest.json"), "utf8"));
-    const walkFiles = (dir) => {
-      const out = [];
-      for (const name of fs.readdirSync(dir)) {
-        const full = path.join(dir, name);
-        const stat = fs.statSync(full);
-        if (stat.isDirectory()) out.push(...walkFiles(full));
-        else if (stat.isFile()) out.push(path.relative(dir, full));
-      }
-      return out;
-    };
-    const actualCount = walkFiles(path.join(tmp, "skills", "light-kanban-worker")).length;
+    const pkgDir = path.join(tmp, "skills", "light-kanban-worker");
+    const actualCount = walkFiles(pkgDir, pkgDir).length;
     assert(actualCount > 0, `pristine copy must contain package files (got ${actualCount})`);
     const ok = verifyManifest(tmp, path.join(tmp, "skills", "manifest.json"));
-    assert(ok.files === manifest.files.length, `pristine copy must verify every manifest file (${ok.files} vs ${manifest.files.length})`);
-    assert(ok.files === actualCount, `pristine copy file count must equal the actual package file set (${ok.files} vs ${actualCount})`);
+    assert(ok.manifestEntryCount === manifest.files.length, `pristine copy must verify every manifest file (${ok.manifestEntryCount} vs ${manifest.files.length})`);
+    assert(ok.manifestEntryCount === actualCount, `pristine copy file count must equal the actual package file set (${ok.manifestEntryCount} vs ${actualCount})`);
     assert(ok.failures.length === 0, `pristine copy must pass (got: ${ok.failures.join("; ")})`);
 
     // Negative fixture 1: a tampered copy fails with a hash mismatch.
-    const tampered = path.join(tmp, "skills", "light-kanban-worker", "SKILL.md");
+    const tampered = path.join(pkgDir, "SKILL.md");
     fs.appendFileSync(tampered, "\n# tampered\n");
     const bad = verifyManifest(tmp, path.join(tmp, "skills", "manifest.json"));
     assert(bad.failures.some((f) => f.includes("hash mismatch: SKILL.md")), "tampered copy must fail with a SKILL.md hash mismatch");
@@ -137,14 +134,23 @@ function main() {
     const missing = verifyManifest(tmp, path.join(tmp, "skills", "manifest.json"));
     assert(missing.failures.some((f) => f.includes("missing file: SKILL.md")), "deleted file must fail with a missing-file error");
 
-    // Negative fixture 3: an unexpected extra file fails even though every
-    // manifest-listed file is still intact (SKILL.md is deleted here, so the
-    // extra file must be reported alongside the missing-file failure).
-    fs.writeFileSync(path.join(tmp, "skills", "light-kanban-worker", "unexpected-extra.md"), "# not part of the vendored snapshot\n");
-    const extra = verifyManifest(tmp, path.join(tmp, "skills", "manifest.json"));
-    assert(extra.failures.some((f) => f.includes("unexpected file: unexpected-extra.md")), "unexpected extra file must fail with an unexpected-file error");
-
     fs.rmSync(tmp, { recursive: true, force: true });
+
+    // Negative fixture 3 (isolated): on a fresh pristine copy, an unexpected
+    // extra file fails even though every manifest-listed file is intact —
+    // the unexpected-file branch is exercised on its own, with no
+    // missing-file or hash-drift failure present.
+    const extraTmp = fs.mkdtempSync(path.join(os.tmpdir(), "lk-vendor-"));
+    fs.cpSync(path.join(REPO_ROOT, "skills"), path.join(extraTmp, "skills"), { recursive: true });
+    fs.writeFileSync(path.join(extraTmp, "skills", "light-kanban-worker", "unexpected-extra.md"), "# not part of the vendored snapshot\n");
+    const extra = verifyManifest(extraTmp, path.join(extraTmp, "skills", "manifest.json"));
+    assert(extra.failures.some((f) => f.includes("unexpected file: unexpected-extra.md")), "unexpected extra file must fail with an unexpected-file error");
+    assert(
+      !extra.failures.some((f) => f.includes("missing file") || f.includes("hash mismatch")),
+      `extra-file negative must exercise the unexpected-file branch in isolation (got: ${extra.failures.join("; ")})`
+    );
+    fs.rmSync(extraTmp, { recursive: true, force: true });
+
     if (failures.length > 0) {
       console.error(`VENDOR_SELF_TEST=FAIL (${failures.length} failures, ${assertions} assertions)`);
       for (const f of failures) console.error(`FAIL: ${f}`);
@@ -154,14 +160,14 @@ function main() {
     return;
   }
 
-  const { files, failures } = verifyManifest(REPO_ROOT, MANIFEST_PATH);
+  const { manifestEntryCount, failures } = verifyManifest(REPO_ROOT, MANIFEST_PATH);
   if (failures.length > 0) {
-    console.error(`VENDOR_SKILL=FAIL (${failures.length} failures, ${files} files checked)`);
+    console.error(`VENDOR_SKILL=FAIL (${failures.length} failures, ${manifestEntryCount} files checked)`);
     for (const f of failures) console.error(`FAIL: ${f}`);
     console.error("Re-vendor from the upstream LightDevCoder/skills tag and regenerate skills/manifest.json — do not edit the snapshot in place.");
     process.exit(1);
   }
-  console.log(`VENDOR_SKILL=PASS (${files} files match skills/manifest.json)`);
+  console.log(`VENDOR_SKILL=PASS (${manifestEntryCount} files match skills/manifest.json)`);
 }
 
 main();

@@ -239,7 +239,7 @@ change, no state-machine change**.
   of `skills/light-kanban-worker/` against `skills/manifest.json` exactly:
   modified file → hash mismatch FAIL; deleted file → missing file FAIL;
   added unlisted file → unexpected file FAIL. `--self-test` covers the
-  positive copy and all three negative classes (7 assertions).
+  positive copy and all three negative classes, with the extra-file negative exercised in isolation (8 assertions).
 
 ### Validation for this release
 
