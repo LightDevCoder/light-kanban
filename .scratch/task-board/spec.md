@@ -181,6 +181,15 @@ knowledge of the REST API — one line suffices:
 Use light-kanban-worker to process at most one Light-Kanban task.
 ```
 
+### Vendored snapshot
+
+This repository ships the Skill as a byte-identical snapshot in
+`skills/light-kanban-worker/` (pinned to `LightDevCoder/skills` tag
+`v0.1.4`, commit `a9cc8aa`) for offline / manual host installation. The
+upstream repository remains the behavioral authority; the snapshot is
+read-only, integrity-pinned by `skills/manifest.json` (SHA-256), and checked
+by `make check` and CI (`scripts/verify-vendored-skill.cjs`).
+
 ### Validation for this release
 
 - Board-side: `make check` + `make cross` (four platforms), no Go/UI behavior

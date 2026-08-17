@@ -5,7 +5,7 @@ NPM ?= npm
 FRONTEND_DIR := frontend
 WEBUI_DIST := internal/webui/dist
 
-.PHONY: build test vet cross run run-lan clean frontend-install frontend-build dev-frontend check
+.PHONY: build test vet cross run run-lan clean frontend-install frontend-build dev-frontend check check-vendor
 
 # Install frontend deps exactly from the lockfile (first run / after upgrades).
 frontend-install:
@@ -38,9 +38,18 @@ cross: frontend-build
 	GOOS=darwin GOARCH=arm64 $(GO) build -o $(DIST)/light-kanban-darwin-arm64 ./cmd/light-kanban
 	GOOS=windows GOARCH=amd64 $(GO) build -o $(DIST)/light-kanban.exe ./cmd/light-kanban
 
+# Integrity guard for the vendored light-kanban-worker Skill snapshot
+# (skills/light-kanban-worker/): every file must match skills/manifest.json
+# (SHA-256 pinned from the upstream LightDevCoder/skills release tag).
+# The script also carries a --self-test with positive/negative fixtures.
+check-vendor:
+	node scripts/verify-vendored-skill.cjs
+	node scripts/verify-vendored-skill.cjs --self-test
+
 # Pre-commit gate (v1.0.4): rebuild the frontend, run its unit tests
 # (vitest — product tour logic), verify the committed embedded dist matches
-# the source, and run every Go check.
+# the source, and run every Go check. v1.0.5 adds the vendored-Skill
+# integrity guard.
 # CI (.github/workflows/ci.yml) runs the same steps.
 check: frontend-build
 	cd $(FRONTEND_DIR) && $(NPM) test
@@ -48,6 +57,7 @@ check: frontend-build
 	$(GO) vet ./...
 	$(GO) test ./...
 	git diff --exit-code -- $(WEBUI_DIST)
+	$(MAKE) check-vendor
 
 # Run with the program's own default: loopback-only (127.0.0.1:8641).
 run:

@@ -83,7 +83,7 @@ Download the binary for your machine from [Releases](https://github.com/LightDev
 
 ### Step 2 — Install the Worker Skill
 
-Install the official worker Skill for your agent host:
+Install the official worker Skill for your agent host (recommended):
 
 ```bash
 npx skills add LightDevCoder/skills#v0.1.4 \
@@ -92,6 +92,8 @@ npx skills add LightDevCoder/skills#v0.1.4 \
   --copy \
   --agent '*'
 ```
+
+No `npx` / offline? This repository ships the same Skill as a byte-identical snapshot in [`skills/light-kanban-worker/`](skills/light-kanban-worker/SKILL.md) — copy the whole folder into your agent host's recognized skills root (e.g. `~/.agents/skills/light-kanban-worker`) and refresh the host. See [`skills/README.md`](skills/README.md).
 
 Source and docs: [LightDevCoder/skills](https://github.com/LightDevCoder/skills) → [`skills/light-kanban-worker/`](https://github.com/LightDevCoder/skills/tree/main/skills/light-kanban-worker) (behavior authority: its `SKILL.md`). Works with Light-Kanban v1.0.4+.
 

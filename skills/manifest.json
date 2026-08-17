@@ -1,0 +1,54 @@
+{
+  "vendor": {
+    "package": "light-kanban-worker",
+    "source": {
+      "repository": "https://github.com/LightDevCoder/skills",
+      "tag": "v0.1.4",
+      "commit": "a9cc8aa029c926fc80f6ddc0022793f79dfd85bd",
+      "path": "skills/light-kanban-worker"
+    },
+    "purpose": "Vendored snapshot for offline / manual host installation. The upstream skills repository is the behavioral authority; never edit these files in place — re-vendor from a future upstream release and regenerate this manifest."
+  },
+  "files": [
+    {
+      "path": "SKILL.md",
+      "sha256": "029cf833f3ba33809c27055a6db893ea10a54d176c722ca1594db1fefb4c40df"
+    },
+    {
+      "path": "agents/openai.yaml",
+      "sha256": "9dd6789e2c2d4bdc6b7ba5811ab08ac49a45ae2f9d69f25e55dc74eef93906a8"
+    },
+    {
+      "path": "references/api.md",
+      "sha256": "54a199de05051813f7768f6f9fe6cd1376315ec45fd7133d2b89fcdb39723c00"
+    },
+    {
+      "path": "tests/fixtures/archive-variant.md",
+      "sha256": "3c76187f1d92523d732b1bd9c596fc58dc25e3321f2bbe18bf2fa47255999520"
+    },
+    {
+      "path": "tests/fixtures/daemon-variant.md",
+      "sha256": "33fe0f141c593a8130528fed1b902e9ee94c0da1c6e8cdd7919ce0c91ae2d1a8"
+    },
+    {
+      "path": "tests/fixtures/multi-task-variant.md",
+      "sha256": "ad489ec00832c9fbfb8a6e98fa8c40f7d3208228cc68f2ebe9de8328c41a550e"
+    },
+    {
+      "path": "tests/fixtures/todo-first-variant.md",
+      "sha256": "535fcd4bfa39c52b33d69bbcd5cc74f3d876f6746c96dd9435a7a8c91e30b273"
+    },
+    {
+      "path": "tests/test_light_kanban_worker_behavior.py",
+      "sha256": "dca278ea1c4807e7efc92d257b8b1cea045ff2af35215172b621df445b97723f"
+    },
+    {
+      "path": "tests/test_light_kanban_worker_contract.py",
+      "sha256": "d87a71e4ae0d6869917f88b7bc4062bb76ee3144296dcee50fad63b85d6541a2"
+    },
+    {
+      "path": "tests/worker_checks.py",
+      "sha256": "7f51547c517f22e75036b39dbf404fd8176497f6a883974a3755ce9b2e431a3a"
+    }
+  ]
+}

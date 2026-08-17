@@ -83,7 +83,7 @@ chmod +x light-kanban-linux-amd64
 
 ### 第二步 — 安装 Worker Skill
 
-给你的 agent host 安装官方 worker Skill：
+给你的 agent host 安装官方 worker Skill（推荐）：
 
 ```bash
 npx skills add LightDevCoder/skills#v0.1.4 \
@@ -92,6 +92,8 @@ npx skills add LightDevCoder/skills#v0.1.4 \
   --copy \
   --agent '*'
 ```
+
+没有 npx / 离线环境？本仓库自带同一 Skill 的**逐字节快照**（[`skills/light-kanban-worker/`](skills/light-kanban-worker/SKILL.md)）——把整个目录复制到 agent host 认可的 skills root（例如 `~/.agents/skills/light-kanban-worker`），刷新 host 即可。详见 [`skills/README.md`](skills/README.md)。
 
 来源与文档：[LightDevCoder/skills](https://github.com/LightDevCoder/skills) → [`skills/light-kanban-worker/`](https://github.com/LightDevCoder/skills/tree/main/skills/light-kanban-worker)（行为权威：其 `SKILL.md`）。兼容 Light-Kanban v1.0.4+。
 
