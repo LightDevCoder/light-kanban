@@ -2,6 +2,8 @@
 
 自托管看板：人类添加任务（每张卡指向一个 workspace 文件夹），自主 AI agent 通过语言无关的 REST API 接取、干活、上报阻碍、完成后交回，人类验收归档。单个 Go 二进制：REST API + SQLite + 内嵌网页（界面支持中文 / English）。
 
+自主 agent 接活、返工、交回的推荐方式是官方 **`light-kanban-worker` Skill**（[LightDevCoder/skills](https://github.com/LightDevCoder/skills) → `light-kanban-worker`）：定时 agent 安装一次即可，每次唤醒处理一张卡，自动完成领取、返工与交回。原始 REST API 对自定义 agent、脚本与集成仍然开放（见[手动 Agent 接入（不装 Skill 的 API 方式）](#手动-agent-接入api-方式不装-skill)）。Skill 行为的权威来源是其 [`SKILL.md`](https://github.com/LightDevCoder/skills/blob/main/skills/light-kanban-worker/SKILL.md)；本 README 只说明两者如何配合。
+
 [English README](README.md) · [下载（Releases）](https://github.com/LightDevCoder/light-kanban/releases)
 
 完整规范、状态机与 API 契约见 `.scratch/task-board/spec.md`；领域词汇见 `CONTEXT.md`。
@@ -73,27 +75,137 @@ chmod +x light-kanban-linux-amd64
 
 ## Quick Start
 
-跑通「建任务 → agent 接取 → 干活 → 验收归档」只需 5 步（首次打开网页时会在**真实界面上**自动运行交互式产品导览——点击高亮的真实控件，导览会带你走完新建任务、任务抽屉、设置菜单与归档历史；完整走完一次即标记完成，之后可在右上「设置」菜单里随时重看）：
+五步从零跑通「**Light-Kanban + 定时 Agent**」，大约五分钟。（首次打开网页时会在**真实界面上**自动运行交互式产品导览——点击高亮的真实控件，导览会带你走完新建任务、任务抽屉、设置菜单与归档历史；完整走完一次即标记完成，之后可在右上「设置」菜单里随时重看。）
 
-1. **启动服务**：`dist\light-kanban.exe`（Windows；其他平台 `make build && ./dist/light-kanban`），浏览器打开 http://127.0.0.1:8641。（局域网 agent 需要 `-addr :8641`——见上文。）
+### 第一步 — 运行 Light-Kanban
 
-2. **添加任务**：点顶栏右侧「**+**」（或待处理列标题右侧的「+」），填标题 + workspace 文件夹路径（直接输入/粘贴路径，或点「选择…」调起系统文件夹窗口），描述 / 标签 / 截止时间可选 → 任务出现在**待处理**列。
+从 [Releases](https://github.com/LightDevCoder/light-kanban/releases) 下载对应你电脑的二进制（见上文[安装与运行](#安装与运行按平台)的表格），放进专用文件夹，**双击 / 直接执行**。浏览器自动打开看板 http://127.0.0.1:8641。（**其他电脑**上的 agent 需要 `-addr :8641`——见上文。）
 
-3. **Agent 接取**（agent 通过 API 自己注册并接取）：
+### 第二步 — 安装 Worker Skill
 
-   ```sh
-   curl "http://127.0.0.1:8641/api/tasks?status=todo"             # 找可接的活（只看待处理）
-   curl -F "file=@avatar.png" http://127.0.0.1:8641/api/avatars   # 上传头像，记下返回的 path
-   curl -X POST -H "Content-Type: application/json" \
-     -d '{"agentId":"my-agent","name":"My Agent","avatar":"/api/avatars/xxx.png"}' \
-     http://127.0.0.1:8641/api/tasks/<id>/claim
-   ```
+给你的 agent host 安装官方 worker Skill：
 
-   接取约束：`name` 用你的工具名，`avatar` 必须是 **agent 自己的图标图片**（例如 Codex 用 Codex 图标、Claude Code 用 Claude Code 图标——上传后的路径或 http(s) 图片 URL），占位图或伪造路径会被 422 拒绝。接取后卡片右上角显示该 agent 的头像。
+```bash
+npx skills add LightDevCoder/skills#v0.1.4 \
+  --skill light-kanban-worker \
+  --yes \
+  --copy \
+  --agent '*'
+```
 
-4. **干活与状态流转**（agent 通过 API）：`POST /api/tasks/<id>/block`（可带 `{"reason":"…"}`，卡片会直接显示卡住原因）、`/unblock`（解除阻碍）、`/complete`（干完交回）。你只需看四列状态。
+来源与文档：[LightDevCoder/skills](https://github.com/LightDevCoder/skills) → [`skills/light-kanban-worker/`](https://github.com/LightDevCoder/skills/tree/main/skills/light-kanban-worker)（行为权威：其 `SKILL.md`）。兼容 Light-Kanban v1.0.4+。
 
-5. **验收归档**：任务到**等你确认**后，悬停卡片或点卡打开抽屉——**验收通过**即归档（进「设置 → 归档历史」，可单条 / 全选删除）；**退回修改**则带着你的反馈退回**处理中**（agent 调 `POST /api/tasks/<id>/reject` 带 `{"feedback":"…"}` 亦可，反馈可从 `GET /api/tasks` 读到）。
+### 第三步 — 创建任务
+
+在看板上点「**+**」填写任务，例如：
+
+```text
+标题：      修复登录跳转 bug
+Workspace：~/projects/my-app
+描述：      复现 OAuth 跳转问题，
+            修复、跑测试并交回验收。
+```
+
+任务进入**待处理**。
+
+### 第四步 — 定时调度 Agent
+
+把下面这段 prompt 交给你的 scheduler（任何能定时运行 agent 的产品——cron、编排器、定时 agent 任务均可）：
+
+```text
+Use light-kanban-worker to process at most one Light-Kanban task.
+
+Light-Kanban URL:
+http://127.0.0.1:8641
+
+Agent ID:
+codex-main
+
+Agent Name:
+Codex
+
+Prefer existing or returned work before claiming a new task.
+When finished, return the task for human confirmation.
+```
+
+每 15 分钟调度一次——或按你的工作负载选择节奏。
+
+想先手动测一次再建定时任务？用一次性 prompt：
+
+```text
+Use light-kanban-worker to process one task from
+http://127.0.0.1:8641 as agent codex-main.
+```
+
+### 第五步 — 验收
+
+Agent 完成后，任务进入**等你确认**。打开卡片——**验收通过**，或**退回修改**并附反馈：下一次 worker 运行会带着你的反馈继续处理原任务。返工不需要新建任务。
+
+## Use Cases（使用场景）
+
+### 定时编码 Agent
+
+下班前排好几张编码任务。每 15 分钟 agent 醒来一次，`light-kanban-worker` 领取**一张**任务、在对应 workspace 里干活、把结果送到**等你确认**——你稍后批量验收。异步积压工作，零逐卡跟进。
+
+### 多个 Agent 共享一个队列
+
+Codex、Claude Code、DeepSeek——各自通过自己的 scheduler 运行 Worker：
+
+```text
+                 ┌─ Codex
+待处理队列 ────────┼─ Claude Code
+                 └─ DeepSeek
+```
+
+领取是原子的：同一张卡不会被两个 Agent 同时领取，多个 Agent 可以安全共用一块看板。
+
+### 人工验收闭环
+
+```text
+Agent 完成任务
+        ↓
+等你确认
+        ↓
+人类发现问题
+        ↓
+退回修改 + 反馈
+        ↓
+同一 Agent 下次唤醒发现
+        ↓
+修复
+        ↓
+等你确认
+```
+
+返工**不是**新建任务——反馈跟着原卡走，同一个 Agent 继续处理。
+
+### 遇到阻碍
+
+缺凭据、缺依赖、需要用户拍板、workspace 不可访问？Agent 直接 **block** 任务并写明具体原因。你在卡片上一眼看到阻碍原因，而不是任务无声死在某次 Agent session 里。
+
+### 跨项目个人队列
+
+一块看板可以同时放 `~/projects/personal-site`、`~/projects/light-kanban`、`~/projects/regex-builder`、`~/work/customer-tool`……每张卡的 **workspace 路径**决定 Agent 进入哪个项目。不用为每个项目维护一套任务系统。
+
+### Light-Kanban 不是什么
+
+它**不是** agent runtime、不是 cron scheduler、不是 CI 替代品、不是云编排服务。它是**人类 ↔ 自主 agent 的工作队列**：你定义工作、验收结果；看板与 Worker 在这两端之间维持闭环。
+
+## 手动 Agent 接入（API 方式，不装 Skill）
+
+自定义 agent、n8n 流程、shell 脚本或 Python worker 可以直接用原始 REST API 驱动同一块看板。这是备用路径——自主 agent 的推荐路径是上面的 `light-kanban-worker` Skill。
+
+```sh
+curl "http://127.0.0.1:8641/api/tasks?status=todo"             # 找可接的活（只看待处理）
+curl -F "file=@avatar.png" http://127.0.0.1:8641/api/avatars   # 上传头像，记下返回的 path
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"agentId":"my-agent","name":"My Agent","avatar":"/api/avatars/xxx.png"}' \
+  http://127.0.0.1:8641/api/tasks/<id>/claim
+```
+
+接取约束：`name` 用你的工具名，`avatar` 必须是 **agent 自己的图标图片**（例如 Codex 用 Codex 图标、Claude Code 用 Claude Code 图标——上传后的路径或 http(s) 图片 URL），占位图或伪造路径会被 422 拒绝。接取后卡片右上角显示该 agent 的头像。
+
+状态流转（agent 通过 API）：`POST /api/tasks/<id>/block`（可带 `{"reason":"…"}`，卡片会直接显示卡住原因）、`/unblock`（解除阻碍）、`/complete`（干完交回）。任务到**等你确认**后由人类验收：**验收通过**即归档；**退回修改**则带着反馈退回处理中（agent 调 `POST /api/tasks/<id>/reject` 带 `{"feedback":"…"}` 亦可，反馈可从 `GET /api/tasks` 读到）。
 
 ## 从源码运行
 

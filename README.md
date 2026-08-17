@@ -2,6 +2,8 @@
 
 A self-hosted kanban board where a human queues tasks (each card points at a workspace folder) and autonomous agents claim, work, block on, and return them for human confirmation. Single Go binary: REST API + SQLite + embedded web UI (English / 中文).
 
+The recommended way for autonomous agents to work the board is the official **`light-kanban-worker` Skill** ([LightDevCoder/skills](https://github.com/LightDevCoder/skills) → `light-kanban-worker`): a scheduled agent installs it once and handles one task per wake-up — claiming, reworking, and returning work automatically. The raw REST API stays available for custom agents, scripts, and integrations (see [Manual Agent Integration](#manual-agent-integration-api-without-the-skill)). The authoritative Skill behavior lives in its [`SKILL.md`](https://github.com/LightDevCoder/skills/blob/main/skills/light-kanban-worker/SKILL.md); this README shows how the two fit together.
+
 [中文 README](README_CN.md) · [Download](https://github.com/LightDevCoder/light-kanban/releases)
 
 See `.scratch/task-board/spec.md` for the full spec, the state machine, and the API contract. See `CONTEXT.md` for the domain vocabulary.
@@ -73,27 +75,137 @@ The browser opens automatically; Ctrl+C stops. To allow other machines on the LA
 
 ## Quick Start
 
-Five steps get you from zero to a full loop (on first launch the web UI runs an interactive product tour over the real interface — click the highlighted controls and it follows you through task creation, the drawer, settings and the archive; finish it once, or reopen it anytime from the settings menu):
+Five steps get you from zero to **Light-Kanban + a scheduled agent** in about five minutes. (On first launch the web UI runs an interactive product tour over the real interface — click the highlighted controls and it follows you through task creation, the drawer, settings and the archive; finish it once, or reopen it anytime from the settings menu.)
 
-1. **Start the service**: `dist\light-kanban.exe` on Windows (other platforms: `make build && ./dist/light-kanban`), then open http://127.0.0.1:8641. (LAN agents need `-addr :8641` — see above.)
+### Step 1 — Run Light-Kanban
 
-2. **Add a task**: click "**+**" in the top bar (or the "+" in the To Do column header), fill in the title + workspace folder path (type/paste it, or click "Choose…" to open the system folder dialog); description / tags / due date are optional → the task lands in the **To Do** column.
+Download the binary for your machine from [Releases](https://github.com/LightDevCoder/light-kanban/releases) (see the table under [Install & Run](#install--run-per-platform)), put it in a dedicated folder, and **double-click / execute it**. The browser opens the board automatically at http://127.0.0.1:8641. (Agents on *other machines* need `-addr :8641` — see above.)
 
-3. **An agent claims it** (agents self-register and claim via the API):
+### Step 2 — Install the Worker Skill
 
-   ```sh
-   curl "http://127.0.0.1:8641/api/tasks?status=todo"             # find available work (todo only)
-   curl -F "file=@avatar.png" http://127.0.0.1:8641/api/avatars   # upload an avatar, note the returned path
-   curl -X POST -H "Content-Type: application/json" \
-     -d '{"agentId":"my-agent","name":"My Agent","avatar":"/api/avatars/xxx.png"}' \
-     http://127.0.0.1:8641/api/tasks/<id>/claim
-   ```
+Install the official worker Skill for your agent host:
 
-   Claim constraints: `name` is your tool name; `avatar` must be the agent's **own icon image** (e.g. Codex claims with the Codex icon, Claude Code with the Claude Code icon — an uploaded path or an http(s) image URL). Placeholders and fabricated paths get a 422. The card then shows the agent's avatar at its top right.
+```bash
+npx skills add LightDevCoder/skills#v0.1.4 \
+  --skill light-kanban-worker \
+  --yes \
+  --copy \
+  --agent '*'
+```
 
-4. **Work and status transitions** (agent, via API): `POST /api/tasks/<id>/block` (optionally with `{"reason":"…"}` — the card shows why it is stuck), `/unblock`, `/complete`. You just watch the four columns.
+Source and docs: [LightDevCoder/skills](https://github.com/LightDevCoder/skills) → [`skills/light-kanban-worker/`](https://github.com/LightDevCoder/skills/tree/main/skills/light-kanban-worker) (behavior authority: its `SKILL.md`). Works with Light-Kanban v1.0.4+.
 
-5. **Review and archive**: when a task reaches **Awaiting Confirmation**, hover the card or open its drawer — **Accept** archives it into the **Archive** (settings menu; single and select-all delete); **Request Changes** sends it back to **In Progress** with your feedback (`POST /api/tasks/<id>/reject` with `{"feedback":"…"}` also works — the agent reads it back from `GET /api/tasks`).
+### Step 3 — Create Work
+
+On the board, click "**+**" and fill in the task, e.g.:
+
+```text
+Title:      Fix login redirect bug
+Workspace:  ~/projects/my-app
+Description: Reproduce the OAuth redirect issue,
+             fix it, run tests and return it for review.
+```
+
+The task lands in **To Do**.
+
+### Step 4 — Schedule the Agent
+
+Point your scheduler at this prompt (any scheduler product that can run your agent on a timer — cron, an orchestrator, a scheduled agent job):
+
+```text
+Use light-kanban-worker to process at most one Light-Kanban task.
+
+Light-Kanban URL:
+http://127.0.0.1:8641
+
+Agent ID:
+codex-main
+
+Agent Name:
+Codex
+
+Prefer existing or returned work before claiming a new task.
+When finished, return the task for human confirmation.
+```
+
+Schedule it every 15 minutes — or whatever cadence fits your workload.
+
+Prefer a one-shot test before creating the schedule? Run the agent once manually with:
+
+```text
+Use light-kanban-worker to process one task from
+http://127.0.0.1:8641 as agent codex-main.
+```
+
+### Step 5 — Review
+
+When the agent finishes, the task sits in **Awaiting Confirmation**. Open the card and **Accept**, or **Request Changes** with feedback — the next worker run picks the task back up (with your feedback) and fixes it. No need to create a new task for rework.
+
+## Use Cases
+
+### Scheduled coding agent
+
+Queue several coding tasks before leaving work. Every 15 minutes the agent wakes, `light-kanban-worker` picks **one** task, works in its workspace, and sends the result to **Awaiting Confirmation** — you review the batch later. Asynchronous backlog processing with zero per-task babysitting.
+
+### Multiple agents sharing one queue
+
+Codex, Claude Code, DeepSeek — each runs the Worker through its own scheduler:
+
+```text
+                 ┌─ Codex
+To Do queue ─────┼─ Claude Code
+                 └─ DeepSeek
+```
+
+Claiming is atomic: the same card can never be claimed by two agents, so all of them can safely share one board.
+
+### Human review loop
+
+```text
+Agent completes task
+        ↓
+Awaiting Confirmation
+        ↓
+Human finds a problem
+        ↓
+Request Changes + feedback
+        ↓
+Same Agent sees it next wake
+        ↓
+Fixes
+        ↓
+Awaiting Confirmation
+```
+
+Rework is *not* a new task — the feedback travels on the original card and the same agent resumes it.
+
+### Blocked work
+
+Missing credential, dependency, user decision, or workspace access? The agent **blocks** the task with a concrete reason. You see the obstacle right on the card instead of a task silently dying inside some agent session.
+
+### Cross-project personal queue
+
+One board can hold cards for `~/projects/personal-site`, `~/projects/light-kanban`, `~/projects/regex-builder`, `~/work/customer-tool`, … Each card's **workspace path** decides which project the agent enters. No per-project task systems to maintain.
+
+### What Light-Kanban is not
+
+It is **not** an agent runtime, a cron scheduler, a CI replacement, or a cloud orchestration service. It is a **human ↔ autonomous agent work queue**: you define work and accept results; the board and the Worker keep the loop honest between those two ends.
+
+## Manual Agent Integration (API without the Skill)
+
+Custom agents, n8n flows, shell scripts, or Python workers can drive the same board through the raw REST API. This is the fallback path — the recommended autonomous-agent path is the `light-kanban-worker` Skill above.
+
+```sh
+curl "http://127.0.0.1:8641/api/tasks?status=todo"             # find available work (todo only)
+curl -F "file=@avatar.png" http://127.0.0.1:8641/api/avatars   # upload an avatar, note the returned path
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"agentId":"my-agent","name":"My Agent","avatar":"/api/avatars/xxx.png"}' \
+  http://127.0.0.1:8641/api/tasks/<id>/claim
+```
+
+Claim constraints: `name` is your tool name; `avatar` must be the agent's **own icon image** (e.g. Codex claims with the Codex icon, Claude Code with the Claude Code icon — an uploaded path or an http(s) image URL). Placeholders and fabricated paths get a 422. The card then shows the agent's avatar at its top right.
+
+Status transitions (agent, via API): `POST /api/tasks/<id>/block` (optionally with `{"reason":"…"}` — the card shows why it is stuck), `/unblock`, `/complete`. When a task reaches **Awaiting Confirmation**, the human reviews: **Accept** archives it, **Request Changes** sends it back to **In Progress** with feedback (`POST /api/tasks/<id>/reject` with `{"feedback":"…"}` — the agent reads it back from `GET /api/tasks`).
 
 ## Run from source
 

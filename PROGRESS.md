@@ -1,14 +1,23 @@
 # PROGRESS — 项目进度与交接记录
 
 > 本文档记录 Light-Kanban 的当前进度、约定、待办与 Mac 迁移指引，供后续维护者快速接上手。
-> 最后更新：2026-08-17（v1.0.4 已发布）
+> 最后更新：2026-08-17（v1.0.5 candidate 准备中）
 
 ## 1. 当前状态
 
 - **远端仓库**：https://github.com/LightDevCoder/light-kanban（public，gh 账号 LightDevCoder）
 - **最新发布**：`v1.0.4`（onboarding & archive release），tag `v1.0.4` + GitHub Release 齐全，四平台二进制已上传（Windows amd64 / Linux amd64 / macOS amd64 / macOS arm64）；`v1.0.3` 及更早的 tag / Release / 二进制保持原样
-- **当前工作**：无进行中的 release；v1.0.4 为最新稳定版本，后续改动等待真实使用反馈
-- **工作树**：与 origin/main 一致
+- **当前工作**：`v1.0.5 candidate`（Worker Skill 集成发布）——文档与版本已就绪，等待用户验收后发布（见第 2a 节）；Skills 侧 `LightDevCoder/skills v0.1.4` 已发布
+- **工作树**：见 git status（v1.0.5 变更未推送前为本地提交）
+
+## 2a. v1.0.5（candidate，未发布）
+
+- **目标**：把 Light-Kanban 从「agent 可通过 REST API 接入」推进为「安装一个 Skill + 建一个定时任务，agent 即可周期接活、执行、交回人工验收」
+- **无 Go / UI / API 变更**：v1.0.5 不新增、不修改任何 REST 端点；不修改 UI、不重新截图、不新增任务状态 / daemon / WebSocket / 认证 / scheduler
+- **Worker Skill（Skills 仓库，v0.1.4 已发布）**：第一方 `light-kanban-worker`（model-invoked，支持手动入口）——每次唤醒最多处理一张卡：稳定 identity（复用服务器已有 name/avatar）→ 先查自己持有的 in_progress（reviewFeedback 优先）→ 无遗留才领取 FIFO 第一张 todo（原子 claim，最多 2 次冲突重试）→ 校验 workspace（不可访问 → block 带具体原因）→ 读任务上下文 + 项目指令 → 执行 → `complete`（等你确认）或 `block` → 停止；绝不 archive/accept/delete/recycle/unblock，无 daemon / 无限轮询 / 运行时脚本
+- **准入与验证**：完整准入路径（`review-loop agent-skill` PASS，独立 Critic + Evaluator，3 findings 修复 + 1 驳回）；行为场景 A–F 对真实 Light-Kanban 服务器全 PASS（新任务 / 退回返工 / 双 worker 原子 claim / workspace 缺失 block / 空队列无变更 / 离线无变更）；v0.1.4 tag 发布后 fresh-install 验证 PASS（CLI 1.5.22，整集合 8 包 + 单 Skill，latest 与 #v0.1.4 形式，安装文件与 tag 逐字节一致）；Skills CI green（顺带修复 ask-light scanner 的跨平台 `Test-PathUnder` 分隔符 bug——v0.1.3 Python 移植后 ubuntu CI 一直红的存量问题）
+- **Light-Kanban 文档**：README / README_CN Quick Start 重写为五步（运行二进制 → 装 Worker Skill → 建卡 → scheduler prompt → 验收），新增 Use Cases（定时编码 Agent / 多 Agent 共享队列 / 人工验收闭环 / 阻碍工作 / 跨项目个人队列 / 边界说明），curl 降级到「手动 Agent 接入（API 方式）」；spec.md 新增「v1.0.5 Worker Integration」章节（无 API 变更 + Skill 协议 + scheduler 边界 + 验证）；manual-test-checklist.md 新增 S 节（8 条 worker 集成清单）+ xlsx 已重新生成；frontend/package.json + package-lock.json = `1.0.5`
+- **发布门禁**：Skills v0.1.4 已先发布并验证（README 引用真实 tag）；Light-Kanban 需 `make check` + `make cross` 四平台 PASS，然后**停下来等用户最终验收**；未经「可以发布」不得创建 v1.0.5 Release
 
 ## 2. v1.0.4（已发布）
 

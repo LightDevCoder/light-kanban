@@ -211,6 +211,21 @@
 | R5 | 1440px / 1024px / 窄窗口 | 三种窗口宽度各走一遍导览 | 箭头不跑出屏幕；tooltip 始终在视口内；横向滚动后定位正确；抽屉/弹窗打开后定位正确 | |
 | R6 | 中英文 | 中文与 English 各走一遍导览 | 所有 coachmark 文案为对应语言，无中英混杂 | |
 
+## S. v1.0.5 Worker Skill 集成（scheduled worker）
+
+> 前提：本机已有可运行 agent 的 host（Codex / Claude Code 等）；服务按默认模式启动（127.0.0.1:8641）。若只在命令行验证，用 S1/S3/S6/S7 的 curl 等价步骤（见 README「手动 Agent 接入」）。
+
+| # | 测什么 | 怎么测 | 预期结果 | 结果 | 评论（留给我） |
+|---|--------|--------|----------|------|--------------|
+| S1 | 安装 Worker Skill | `npx skills add LightDevCoder/skills#v0.1.4 --skill light-kanban-worker --yes --copy --agent '*'` | 安装成功；`npx --yes skills list` 列出 `light-kanban-worker`（不依赖源码 checkout） | |
+| S2 | 一次性手动运行 | 建一张 todo 卡后，用 prompt「Use light-kanban-worker to process one task from http://127.0.0.1:8641 as agent codex-main.」跑一次 | Agent 领取该卡 → 进入 workspace 执行 → `complete` → 卡片到**等你确认**，本次运行结束 | |
+| S3 | 定时 prompt | 用 README Quick Start 第四步的 scheduler prompt 创建每 15 分钟（或更短）的定时任务 | 每次唤醒只处理一张卡；没有卡时正常结束，不新建任务、不卡死 | |
+| S4 | 退回修改闭环 | 对**等你确认**卡点「退回修改」并附反馈 | 下一次唤醒同一 Agent 优先处理该卡，按反馈修改后重新 `complete` 到**等你确认**；不需要新建任务 | |
+| S5 | workspace 缺失 | 新建一张 workspace 路径不存在的卡 | Worker 领取后 block，卡上显示「Workspace path is not accessible from this agent host.」 | |
+| S6 | 双 Agent 原子领取 | 两个不同 agentId 同时领取同一张 todo（或手动并发两次 claim） | 恰好一个 200、一个 409；输家重读队列后结束，不会死循环 | |
+| S7 | 空队列 | 清空所有活跃任务后运行一次 worker | 「No task available」干净退出；数据库无变化 | |
+| S8 | 服务离线 | 停掉 Light-Kanban 后运行一次 worker | 清晰报错结束；不修改任何任务 | |
+
 ---
 
-**判读**：A~L 全部 ✅ 即核心功能验收通过；M、N 为抽查项；O 为 v1.0.3 加固专项；P、Q、R 为 v1.0.4 归档快捷入口 + 交互式产品导览专项。任一 ❌ 请把编号和现象发回来。
+**判读**：A~L 全部 ✅ 即核心功能验收通过；M、N 为抽查项；O 为 v1.0.3 加固专项；P、Q、R 为 v1.0.4 归档快捷入口 + 交互式产品导览专项；S 为 v1.0.5 Worker Skill 集成专项。任一 ❌ 请把编号和现象发回来。

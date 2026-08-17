@@ -140,3 +140,52 @@ Status: ready-for-agent
 - The `.scratch/` issue tracker set up by `/setup-matt-pocock-skills` tracks **Light-Kanban's own development**; it is distinct from the tasks this board manages.
 - The "constraint" model: identity and tags are reserved fields plus agent-facing instructions — agents self-configure when claiming, keeping the board minimal and avoiding human data entry.
 - Agents are expected to call the API from their own scheduled tasks; scheduling/orchestration is outside this board's responsibility.
+
+## v1.0.5 Worker Integration
+
+Status: candidate (pending user acceptance before release).
+
+### No API change
+
+v1.0.5 adds **no new REST endpoint and changes no existing one**. The Worker
+Skill uses exactly the v1.0.4+ surface: `GET /api/agents`, `GET
+/api/tasks?status=in_progress|todo`, `POST /api/tasks/:id/claim|block|
+complete`, `POST /api/avatars`. The API contract above remains the single
+board-side authority.
+
+### Agent-side protocol moves to a Skill
+
+- The official agent-side protocol is the first-party **`light-kanban-worker`**
+  Skill in `LightDevCoder/skills` (released in Skills v0.1.4, compatible with
+  Light-Kanban v1.0.4+). Its `SKILL.md` is the authority for agent behavior;
+  this spec is the authority for board behavior — the two contracts are kept
+  separate on purpose.
+- Golden flow (Skill side): resolve stable identity → check owned
+  in_progress (reviewFeedback first) → otherwise claim the first FIFO todo
+  (at most 2 claim attempts on conflict) → validate `workspacePath` on the
+  agent host (unreachable workspace → block with a meaningful reason) →
+  execute inside the project's own workflow → `complete` (→ 等你确认) or
+  `block` with a concrete reason → stop. At most ONE task per run; no
+  daemon, no polling loop, no auto-archive/accept/delete/recycle/unblock.
+- Review boundary: 等你确认 is human-owned (accept / request changes). A
+  Request Changes rejection sets `reviewFeedback` and returns the task to
+  处理中, where the same agent's next run resumes it first.
+
+### Scheduler boundary
+
+The scheduler (cron, orchestrator, scheduled agent run) decides **when** the
+agent wakes; Light-Kanban never starts agents. The scheduler prompt needs no
+knowledge of the REST API — one line suffices:
+
+```text
+Use light-kanban-worker to process at most one Light-Kanban task.
+```
+
+### Validation for this release
+
+- Board-side: `make check` + `make cross` (four platforms), no Go/UI behavior
+  change — this release is documentation + integration packaging.
+- Cross-repo: the Worker Skill passed its full admission
+  (`review-loop agent-skill` PASS), behavioral scenarios A–F against a real
+  Light-Kanban server, and fresh-install verification from Skills v0.1.4.
+
