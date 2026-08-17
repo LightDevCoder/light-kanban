@@ -143,7 +143,7 @@ Status: ready-for-agent
 
 ## v1.0.5 Worker Integration
 
-Status: candidate (pending user acceptance before release).
+Status: released in v1.0.5.
 
 ### No API change
 
