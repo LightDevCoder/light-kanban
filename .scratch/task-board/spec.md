@@ -203,8 +203,7 @@ hash drift, and unexpected extra files all fail).
 
 ## v1.0.6 Worker Maintenance
 
-Status: release candidate — prepared for v1.0.6, published after user
-acceptance. Maintenance release — **no REST API change, no UI
+Status: released in v1.0.6. Maintenance release — **no REST API change, no UI
 change, no state-machine change**.
 
 ### Same-agent runs must not overlap

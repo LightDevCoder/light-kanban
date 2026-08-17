@@ -1,16 +1,16 @@
 # PROGRESS — 项目进度与交接记录
 
 > 本文档记录 Light-Kanban 的当前进度、约定、待办与 Mac 迁移指引，供后续维护者快速接上手。
-> 最后更新：2026-08-17（v1.0.6 维护发布准备中）
+> 最后更新：2026-08-17（v1.0.6 已发布）
 
 ## 1. 当前状态
 
 - **远端仓库**：https://github.com/LightDevCoder/light-kanban（public，gh 账号 LightDevCoder）
-- **最新发布**：`v1.0.5`（light-kanban-worker Skill 集成）；`v1.0.6`（Worker 维护发布）为当前 release candidate，待用户验收后发布；发布时上传四平台二进制（Windows amd64 / Linux amd64 / macOS amd64 / macOS arm64）+ `light-kanban-worker.zip`（Skills v0.1.5 快照）
-- **当前工作**：v1.0.6 维护发布——Skills v0.1.5 已实现并重新 vendor，`make check` / `make cross` PASS，等待用户验收（manual-test-checklist T 节）后发布
-- **工作树**：v1.0.6 candidate
+- **最新发布**：`v1.0.6`（Worker 维护发布），tag `v1.0.6` + GitHub Release 齐全，四平台二进制（Windows amd64 / Linux amd64 / macOS amd64 / macOS arm64）+ `light-kanban-worker.zip`（Skills v0.1.5 快照）已作为 release 资产上传；`v1.0.5` 及更早的 tag / Release / 二进制保持原样
+- **当前工作**：v1.0.6 为最新稳定版本
+- **工作树**：与 origin/main 一致
 
-## 2d. v1.0.6（release candidate，待用户验收发布）— Worker 维护
+## 2d. v1.0.6（已发布）— Worker 维护
 
 - **范围**：纯维护发布——无 REST API 变更、无 UI 变更、无任务状态机变更、不重新截图；Skills v0.1.5 先发布并 fresh-install 验证，再重新 vendor 并发布 Light-Kanban v1.0.6
 - **Skills v0.1.5（上游行为权威）**：`light-kanban-worker` 明确禁止同一 agentId 的 scheduled run 重叠（同一 agentId 任意时刻至多一个 invocation 活跃，上一 run 未结束时唤醒必须 skip；不同 agentId 仍可并发）；准确记录 atomic claim 边界（只保护不同 worker 争同一张 To Do，不是同一 agent identity 的并发锁）；并发控制归 scheduler / agent runtime（`max concurrent runs = 1` 或等价设置），worker 不新增 lock/heartbeat/lease service；首次注册明确要求 ID + name + avatar（本地图片经 `POST /api/avatars` 上传），已有身份复用服务器 name/avatar，缺 avatar 的新身份不 claim 不改动；新增 contract/behavior 测试、两个对抗性 negative fixture 与场景 G（同 agent 并发唤醒）/H（无 avatar 新身份，诚实记录验证边界），A–F 不变；`review-loop agent-skill` 第二次 PASS（4 findings 修复：F-001 pre-tag 发布表述 / F-002 api.md 版本表述 / F-003 收据 gate 行 / G-001 残留 published 句子）；release evidence 区分 pre-release gate / post-release verification
